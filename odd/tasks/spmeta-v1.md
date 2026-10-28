@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T2 done; T3 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T3 done; T4 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -92,7 +92,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T3 Formatters and the read path
 
-- [ ] T3 complete
+- [x] T3 complete
+- Evidence (2026-10-27): RED build failure (no `internal/format`, `cli.WithBackend` undefined), plus 14 hand-written text goldens authored before the implementation; then `TestJSONDoesNotEscapeHTML` and the error-path tests failed until fixed. GREEN `go test -race -count=1 ./...` passes; all 13 JSON goldens validate against the schema; `go vet` clean, `golangci-lint run` 0 issues; `jsonschema` absent from binary deps. Binary: no args → exit 4; `--template '{nope}'` → exit 2 with position; `--format xml` → exit 2. Parent spot check re-ran tests and lint. Choices beyond the docs: `--quiet` silences stdout and stderr except usage errors (matches cli.md); JSON `null` only for nothing playing; an explicit `--format` wins over `--template`; template positions are 1-based runes. Parent documented the stderr `spmeta:`/`hint:` contract in cli.md and added a T9 note on NDJSON encoding. Actual: about 1,270 authored lines (about 730 tests) plus 40 goldens, against a 450 forecast.
 - Goal: text, JSON and template output, and the root command wiring of `--format`, `--template`, `--quiet`, `--debug` against an injected backend.
 - Files: `internal/format/{json.go,text.go,template.go,*_test.go,testdata/*}`, `internal/cli/{read.go,exit.go,read_test.go}`.
 - Test-first: RED golden tests for text (all omission rules, ad and no-title fallbacks, control-character sanitizing), JSON (one line, `null` for nothing), template (fields, `{{`/`}}`, nulls, durations, parse errors with position); `cli.Run` with a fake backend returning each `Kind` produces the right exit code and stderr (`spmeta:` and `hint:` lines; nothing under `--quiet`). Every golden JSON validates against the schema.
@@ -164,6 +165,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 - Files: `internal/watch/{watch.go,watch_test.go}`, `internal/resolve/{throttle.go,throttle_test.go}`, `internal/cli/read.go` (`--watch`, `--interval` validation), `cmd/spmeta/main.go` (signal context).
 - Test-first: RED sequences per [architecture.md](../../docs/design/architecture.md) Watch loop: first emission, position-only change silent, track/state/device change emits, transition to nothing emits once, rate limit sleeps, unexpected errors deduplicated with backoff, fatal 5 and 6, cancellation returns nil; throttle returns cached results within the interval.
 - Acceptance: `spmeta --watch` on this Mac prints one line per track change and nothing between (manual check recorded in the findings log).
+- Note (from T3): emit NDJSON only through `format.JSON`. `model.NowPlaying.MarshalJSON` uses `json.Marshal`, which escapes `&`, `<`, `>`; `format.JSON` deliberately does not, so a different encoding path would change the output contract.
 - Route: delegated (4 non-trivial files).
 - Depends on: T8.
 - Forecast: 350 lines.
@@ -297,4 +299,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T3 Formatters and the read path (delegated writer).
+T4 Configuration and precedence (delegated writer).

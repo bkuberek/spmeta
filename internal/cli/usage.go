@@ -21,8 +21,12 @@ Commands:
   help      Print this help
 
 Flags:
-  -h, --help      Print this help
-      --version   Print version and build information
+      --format text|json|template  Output format (default text)
+      --template STR               Template for --format template, for example '{artist} - {title}'
+      --quiet                      Print nothing; only set the exit code
+      --debug                      Write diagnostics to stderr
+  -h, --help                       Print this help
+      --version                    Print version and build information
 `
 
 // BuildInfo describes the running binary. Empty fields are omitted from output.

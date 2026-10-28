@@ -130,6 +130,8 @@ The `{field}` syntax was chosen over Go `text/template` for four reasons:
 | 6 | Permission denied: macOS Automation not granted, or Web 403 (not on the app's allowlist, or the app owner's Premium lapsed) |
 | 7 | Rate limited by the Web API and gave up |
 
+Every non-zero exit prints one `spmeta: <message>` line on stderr, optionally followed by a `hint: <next step>` line; this includes exit 3, while stdout stays as described under Output formats. `--quiet` suppresses both lines, except for usage errors (exit 2).
+
 With `--source auto`, when no source returns an item, the exit code comes from the highest-precedence error: 6, then 5, then 7, then 1, then 3, then 4 ([ADR 0005](../decisions/0005-auto-source-resolution.md)).
 
 In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running.
