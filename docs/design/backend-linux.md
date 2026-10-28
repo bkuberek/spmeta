@@ -41,7 +41,7 @@ func (b *Backend) Players(ctx context.Context) ([]PlayerInfo, error)
 
 Then connect with `dbus.Connect(address, dbus.WithContext(ctx))`, which authenticates and sends `Hello`. A connection error is `NotAvailable` with the same hint. Each `Read` opens one connection and closes it before returning, so a restarted bus never leaves a stale connection.
 
-The godbus function names in this document (`Connect`, `WithContext`, `CallWithContext`, `Store`) are from general knowledge of the v5 API; task T7 checks them against the package documentation.
+The godbus names in this document (`Connect`, `WithContext`, `BusObject`, `Object`, `CallWithContext`, `Store`, `Variant.Value`) were checked against `go doc` and the source of v5.2.4 in task T7. `Connect` authenticates and sends `Hello`, and cancelling the context passed to `WithContext` closes the connection.
 
 ## D-Bus calls
 
@@ -72,6 +72,8 @@ The adapter converts each `dbus.Variant` to plain Go values recursively before r
 | `map[string]dbus.Variant` | `map[string]any` |
 | nested `dbus.Variant` | its converted value |
 | strings, string slices, integers, floats, booleans | unchanged |
+
+`convert.go` implements this table without importing godbus: it opens any value with a `Value() any` method (`dbus.Variant`) and converts string-kind values (`dbus.ObjectPath`) and string-keyed maps by reflection, so it is unit-tested on every OS. `address.go` holds the session bus address resolution the same way.
 
 Mapping helpers accept every shape players are known to send:
 
@@ -192,12 +194,14 @@ One-shot reads against Spotify desktop therefore report null whenever it reports
 Task T7 adds `internal/backend/mpris/integration_test.go` with build tag `integration`. The test:
 
 1. Connects to the session bus with `Dial`.
-2. Exports an object at `/org/mpris/MediaPlayer2` that implements `org.freedesktop.DBus.Properties.GetAll` for `org.mpris.MediaPlayer2.Player`, returning fixture metadata built with real `dbus.Variant` and `dbus.ObjectPath` values.
-3. Requests the name `org.mpris.MediaPlayer2.spotify` (and, in a second case, `org.mpris.MediaPlayer2.spotifyd.instance42`).
-4. Runs `Backend.Read` and compares the JSON output with a golden file.
+2. Exports an object at `/org/mpris/MediaPlayer2` with `prop.Export` from `github.com/godbus/dbus/v5/prop`, which serves `org.freedesktop.DBus.Properties.GetAll` for `org.mpris.MediaPlayer2.Player`. The fixture metadata uses real `dbus.Variant` and `dbus.ObjectPath` values.
+3. Requests the name `org.mpris.MediaPlayer2.spotify` (and, in other cases, `org.mpris.MediaPlayer2.spotifyd.instance42`) with `dbus.NameFlagDoNotQueue`.
+4. Runs `Backend.Read` and compares the JSON output with the golden files that the fake-bus tests use.
+
+It also covers `Players`, an empty bus, an unreachable address, and no address at all (`NotAvailable`, no autolaunch).
 
 CI runs it on `ubuntu-latest` after `sudo apt-get install -y dbus-daemon`:
 
 ```bash
-dbus-run-session -- go test -tags integration ./internal/backend/mpris/...
+dbus-run-session -- go test -race -count=1 -tags integration ./internal/backend/mpris/...
 ```

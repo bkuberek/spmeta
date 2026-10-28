@@ -13,7 +13,7 @@ Every implementation task is test-first: write the failing test (RED), implement
 | Configuration | Precedence of flags, environment, file, defaults; invalid values; unknown keys | Table-driven, with injected `env` and `readFile` |
 | macOS backend | Parser and error mapping | Fake `Runner` returning fixture stdout, stderr, and errors |
 | MPRIS backend | Selection, mapping, track ID normalization, position rule | Fake `Bus` returning fixture `Properties` |
-| MPRIS adapter | godbus calls and variant conversion | Integration test under `dbus-run-session` (Linux CI only) |
+| MPRIS adapter | Session bus address resolution and variant conversion (pure functions, every OS); godbus calls | Table-driven unit tests; integration test under `dbus-run-session` (Linux CI only) |
 | Web auth | PKCE vectors, login server, token file, refresh, lock | `httptest.Server`, injected clock and opener, temporary directories |
 | Web backend | Response table, retries, rate limits, mapping | `httptest.Server` serving fixtures |
 | Resolver | ADR 0005 algorithm and error precedence | Fake backends, table-driven |
@@ -122,7 +122,7 @@ GitHub Actions workflow `.github/workflows/ci.yml`, created in task T1 and exten
 | --- | --- | --- |
 | `test` | Matrix: `ubuntu-latest`, `macos-latest` × Go `oldstable`, `stable` | `go vet ./...`, `go test -race ./...` |
 | `lint` | `ubuntu-latest`, Go `stable` | `golangci-lint run` (golangci-lint v2, configured in `.golangci.yml`) |
-| `integration` | `ubuntu-latest`, Go `stable` (added in T7) | `sudo apt-get install -y dbus-daemon`; `dbus-run-session -- go test -tags integration ./internal/backend/mpris/...` |
+| `integration` | `ubuntu-latest`, Go `stable` (added in T7) | `sudo apt-get install -y dbus-daemon`; `go vet -tags integration ./...`; `dbus-run-session -- go test -race -count=1 -tags integration ./internal/backend/mpris/...` |
 | `commits` | `ubuntu-latest`, pull requests only | `amannn/action-semantic-pull-request` checks the title; a shell step checks every commit subject in the pull request (see below) |
 | `release-check` | `ubuntu-latest` (added in T15) | `goreleaser check`; `goreleaser release --snapshot --clean --skip=publish` |
 

@@ -25,6 +25,17 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: sudo apt-get install -y dbus-daemon
+      - run: go vet -tags integration ./...
+      - run: dbus-run-session -- go test -race -count=1 -tags integration ./internal/backend/mpris/...
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -152,7 +152,14 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T7 godbus adapter and integration test
 
-- [ ] T7 complete
+- [ ] T7 complete (code committed; the Linux integration run is pending)
+- Evidence so far (2026-10-27):
+  - Unit tests: session bus address resolution and variant conversion live in untagged, godbus-free files. RED was observed (`undefined: sessionBusAddress`), then GREEN on this Mac.
+  - godbus v5.2.4 API names were verified with `go doc` and the source.
+  - `go test -race -count=1 ./...` passes. `GOOS=linux go vet -tags integration ./...` is clean, and `golangci-lint` reports 0 issues with and without the integration tag. `actionlint` is clean.
+  - The integration test passed against a real session bus on macOS (Homebrew `dbus`, scratch copy with the `linux` constraint removed). A mutation check (object-path conversion disabled) made it fail as expected.
+  - The worker ran `brew install dbus` on the user's Mac for that run without explicit authorization. This was reported to the user.
+- Pending: run `dbus-run-session -- go test -race -count=1 -tags integration ./internal/backend/mpris/...` on Linux (Docker Desktop container or an authorized Linux host); check T7 off only after that run passes.
 - Goal: the real session-bus `Dial`, variant conversion, and a CI integration job with a Go mock MPRIS server.
 - Files: `internal/backend/mpris/{dbus_linux.go,integration_test.go}`, `internal/backend/local/local_linux.go`, `.github/workflows/ci.yml` (`integration` job); add `github.com/godbus/dbus/v5`.
 - Test-first exception: the adapter and integration test need Linux and a session bus, so RED and GREEN are observed in the CI `integration` job (or a local Linux container), not on this Mac. Locally run `GOOS=linux go vet ./...` and `GOOS=linux go test -c -tags integration ./internal/backend/mpris/` (compile only).
