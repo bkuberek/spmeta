@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bkuberek/spmeta/main/schema/spmeta.schema.json",
+  "title": "spmeta NowPlaying",
+  "description": "One now-playing object printed by `spmeta --format json`. When nothing is playing, spmeta prints the JSON literal null instead and exits 3. New optional properties may be added without changing schema_version; consumers must ignore unknown properties.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source",
+    "state",
+    "type",
+    "title",
+    "artists",
+    "artist",
+    "album",
+    "album_artist",
+    "track_number",
+    "disc_number",
+    "duration_ms",
+    "position_ms",
+    "uri",
+    "url",
+    "artwork_url",
+    "isrc",
+    "explicit",
+    "device",
+    "fetched_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this schema. Incremented on any incompatible change.",
+      "const": 1
+    },
+    "source": {
+      "description": "Backend that produced the object.",
+      "enum": ["macos", "mpris", "web"]
+    },
+    "state": {
+      "description": "Playback state. stopped is reported only when a source says Stopped but still exposes a loaded item.",
+      "enum": ["playing", "paused", "stopped"]
+    },
+    "type": {
+      "description": "Kind of item. Derived from the Spotify URI or the Web API item type.",
+      "enum": ["track", "episode", "ad", "unknown"]
+    },
+    "title": {
+      "description": "Track or episode title.",
+      "$ref": "#/$defs/nullableText"
+    },
+    "artists": {
+      "description": "Artist names in source order. Empty when unknown; never null. On macOS this holds one entry with the app's single artist string.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "artist": {
+      "description": "artists joined with \", \"; null when artists is empty.",
+      "$ref": "#/$defs/nullableText"
+    },
+    "album": {
+      "description": "Album name; for episodes, the show name.",
+      "$ref": "#/$defs/nullableText"
+    },
+    "album_artist": {
+      "description": "Album artist names joined with \", \".",
+      "$ref": "#/$defs/nullableText"
+    },
+    "track_number": {
+      "description": "1-based track number; null when unknown or reported as 0.",
+      "$ref": "#/$defs/nullablePositiveInteger"
+    },
+    "disc_number": {
+      "description": "1-based disc number; null when unknown or reported as 0.",
+      "$ref": "#/$defs/nullablePositiveInteger"
+    },
+    "duration_ms": {
+      "description": "Item length in milliseconds; null when unknown or reported as 0.",
+      "$ref": "#/$defs/nullablePositiveInteger"
+    },
+    "position_ms": {
+      "description": "Playback position in milliseconds at fetched_at; null when the source does not report it reliably.",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "uri": {
+      "description": "Spotify URI, for example spotify:track:<id>, spotify:episode:<id>, spotify:ad:<id>, or spotify:local:<...>.",
+      "type": ["string", "null"],
+      "pattern": "^spotify:[a-z]+:.+$"
+    },
+    "url": {
+      "description": "https://open.spotify.com/{type}/{id} for tracks and episodes; null for ads, local files, and unknown items.",
+      "type": ["string", "null"],
+      "format": "uri",
+      "pattern": "^https://open\\.spotify\\.com/"
+    },
+    "artwork_url": {
+      "description": "HTTPS URL of the cover image; the largest available on the Web source.",
+      "type": ["string", "null"],
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "isrc": {
+      "description": "International Standard Recording Code. Web source only; null when Spotify omits it.",
+      "$ref": "#/$defs/nullableText"
+    },
+    "explicit": {
+      "description": "Explicit-content flag. Web source only.",
+      "type": ["boolean", "null"]
+    },
+    "device": {
+      "description": "Playback device. Web source only.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["name", "type", "volume_percent"],
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "description": "Spotify device type, for example Computer, Smartphone, Speaker.", "type": "string" },
+            "volume_percent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 }
+          }
+        }
+      ]
+    },
+    "fetched_at": {
+      "description": "UTC time of the read, RFC 3339 with second precision, for example 2026-10-25T17:40:00Z.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "source": { "enum": ["macos", "mpris"] } } },
+      "then": {
+        "properties": {
+          "isrc": { "type": "null" },
+          "explicit": { "type": "null" },
+          "device": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "source": { "const": "web" } } },
+      "then": { "properties": { "state": { "enum": ["playing", "paused"] } } }
+    }
+  ],
+  "$defs": {
+    "nullableText": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "nullablePositiveInteger": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    }
+  }
+}

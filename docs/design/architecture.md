@@ -1,0 +1,323 @@
+# Architecture
+
+`spmeta` is a single Go binary. A thin CLI parses flags and configuration, hands the read to a resolver, and the resolver asks the backends in order and returns one normalized `NowPlaying` object to a formatter. This document defines the package layout, the backend interface and typed errors, the resolver algorithm, the watch loop, configuration precedence, and dependency boundaries.
+
+![spmeta architecture: three backends behind one resolver](../assets/architecture.webp)
+
+The diagram shows the original PRD naming; the structure is unchanged.
+
+## Package layout
+
+The module path is `github.com/bkuberek/spmeta`. All packages except `cmd/spmeta` are internal.
+
+```text
+cmd/spmeta/
+  main.go                 # version vars (set by -ldflags), signal context, os.Exit(cli.Run(...))
+internal/cli/
+  cli.go                  # Run: dispatch to read, auth, doctor, version, help
+  read.go                 # root command: flags, resolver, formatter, watch
+  auth.go                 # auth login|logout|status (added in T12)
+  doctor.go               # doctor command
+  usage.go                # usage text, UsageError (exit 2)
+  exit.go                 # error printing and exit-code mapping
+internal/model/
+  nowplaying.go           # NowPlaying, Device, Source, State, ItemType
+  normalize.go            # Normalize, ParseURI, OpenURL
+  duration.go             # FormatDuration
+internal/format/
+  json.go                 # one-line JSON, "null" for nothing playing
+  text.go                 # default text line
+  template.go             # {field} mini-syntax: Parse, Render
+internal/config/
+  paths.go                # XDG config dir, config and token paths
+  config.go               # TOML file, env, flag merge into Settings
+internal/backend/
+  backend.go              # Backend interface
+  errors.go               # Error, Kind, ExitCode, Worse
+internal/backend/macos/
+  runner.go               # Runner interface, exec implementation
+  script.go               # the AppleScript (constant)
+  parse.go                # output parser
+  macos.go                # Backend implementation, permission check for doctor
+internal/backend/mpris/
+  bus.go                  # Bus interface, Properties type
+  select.go               # player matching and selection
+  mapping.go              # Metadata to NowPlaying, trackid normalization
+  mpris.go                # Backend implementation, position memory
+  dbus_linux.go           # godbus adapter (//go:build linux)
+internal/backend/local/
+  local_darwin.go         # New() returns the macOS backend
+  local_linux.go          # New() returns the MPRIS backend
+  local_other.go          # New() returns a backend that always reports NotAvailable
+internal/backend/web/
+  client.go               # HTTP client, base URL injection, retries
+  mapping.go              # /me/player JSON to NowPlaying
+  web.go                  # Backend implementation
+internal/auth/
+  pkce.go                 # verifier, challenge, state
+  login.go                # loopback server, authorize URL, code exchange
+  token.go                # token file read and atomic write (0600)
+  refresh.go              # refresh logic with file lock
+  lock_unix.go            # flock on token.json.lock
+internal/resolve/
+  resolve.go              # source resolution (auto, local, web)
+  throttle.go             # minimum interval between Web reads in watch mode
+internal/watch/
+  watch.go                # polling loop, change detection, emission
+internal/doctor/
+  doctor.go               # collects source checks into a report
+schema/
+  spmeta.schema.json      # moved here from docs/design in T2
+testdata/ per package     # golden files and fixtures
+```
+
+Unit tests live next to the code (`*_test.go`). Fixtures live in each package's `testdata/` directory.
+
+## Backend interface
+
+Every source implements one interface.
+
+```go
+package backend
+
+type Backend interface {
+	// Source identifies the backend in output and errors.
+	Source() model.Source
+	// Read returns the current item, already normalized, or a *Error.
+	// It must honor ctx cancellation and deadlines.
+	Read(ctx context.Context) (model.NowPlaying, error)
+}
+```
+
+Backends receive their collaborators through constructors so tests can inject fakes:
+
+| Backend | Constructor | Injected collaborators |
+| --- | --- | --- |
+| macOS | `macos.New(r Runner, now func() time.Time)` | `Runner` runs `pgrep` and `osascript` |
+| MPRIS | `mpris.New(dial func(ctx) (Bus, error), player string, now func() time.Time)` | `Bus` lists names and reads properties |
+| Web | `web.New(c *web.Client, now func() time.Time)` | `*http.Client`, API and accounts base URLs, token source |
+
+## Typed errors and exit codes
+
+Backends return `*backend.Error`. The CLI maps the kind to an exit code. Usage errors are produced by the CLI, not by backends.
+
+```go
+type Kind int
+
+const (
+	KindUnexpected Kind = iota + 1
+	KindNothingPlaying
+	KindNotAvailable
+	KindAuthRequired
+	KindPermissionDenied
+	KindRateLimited
+)
+
+type Error struct {
+	Kind       Kind
+	Source     model.Source  // empty when not tied to a source
+	Message    string        // one line, user-facing, no secrets
+	Hint       string        // next step for the user; may be empty
+	RetryAfter time.Duration // KindRateLimited only
+	Err        error         // wrapped cause; logged only under --debug
+}
+
+func (e *Error) Error() string
+func (e *Error) Unwrap() error
+
+// KindOf returns the Kind of a *Error found with errors.As, or KindUnexpected.
+func KindOf(err error) Kind
+
+// ExitCode maps a Kind to the process exit code.
+func ExitCode(k Kind) int
+
+// Worse returns whichever error has the higher precedence (see the resolver).
+func Worse(a, b error) error
+```
+
+| Kind | Exit code | Typical cause |
+| --- | --- | --- |
+| (success) | 0 | An item is playing, paused, or loaded |
+| `KindUnexpected` | 1 | Unparseable output, network failure, timeout, 5xx |
+| (usage error) | 2 | Bad flag, unknown template field, invalid configuration value |
+| `KindNothingPlaying` | 3 | Source reachable, nothing loaded, or no active Web device |
+| `KindNotAvailable` | 4 | App not running, no MPRIS player, no session bus, not logged in |
+| `KindAuthRequired` | 5 | Refresh failed (`invalid_grant`), token file unreadable, login aborted |
+| `KindPermissionDenied` | 6 | macOS Automation denied (-1743), Web 403 |
+| `KindRateLimited` | 7 | Web 429 beyond the one-shot retry budget |
+
+On failure, the CLI prints to stderr:
+
+```text
+spmeta: <Message>
+hint: <Hint>
+```
+
+The `hint:` line is omitted when `Hint` is empty. `--quiet` suppresses both lines; usage errors (exit 2) are always printed. `--debug` adds the wrapped cause.
+
+## Resolver
+
+`internal/resolve` implements [ADR 0005](../decisions/0005-auto-source-resolution.md).
+
+```go
+type Mode string // "auto", "local", "web"
+
+type Resolver struct {
+	Mode  Mode
+	Local backend.Backend // never nil; local_other.go returns an always-NotAvailable backend
+	Web   backend.Backend // nil when Web is not configured (no token file) or not built
+}
+
+func (r *Resolver) Read(ctx context.Context) (model.NowPlaying, error)
+```
+
+Algorithm for `auto`:
+
+```text
+L, errL := Local.Read(ctx)
+if errL == nil && L.State == playing        -> return L
+if Web != nil:
+    W, errW := Web.Read(ctx)
+    if errW == nil && W.State == playing    -> return W
+if errL == nil                              -> return L   # paused or stopped with an item
+if Web != nil && errW == nil                -> return W   # paused on another device
+return Worse(errL, errW)
+```
+
+For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is nil, return `NotAvailable` with the message "not logged in to the Spotify Web API" and the hint "run `spmeta auth login`" (or, in builds without Web, "Web mode is not available in this version").
+
+Error precedence for `Worse`, highest first: `KindPermissionDenied`, `KindAuthRequired`, `KindRateLimited`, `KindUnexpected`, `KindNothingPlaying`, `KindNotAvailable`. A nil error has the lowest precedence. When both errors have the same kind, the local error wins.
+
+Each backend read runs under its own timeout (see Timeouts). The resolver itself adds no deadline.
+
+## Watch loop
+
+`internal/watch` implements FR-10.
+
+```go
+type Reader interface {
+	Read(ctx context.Context) (model.NowPlaying, error)
+}
+
+type Options struct {
+	Interval time.Duration                          // local poll interval
+	Emit     func(np *model.NowPlaying) error       // nil np means nothing playing
+	Sleep    func(ctx context.Context, d time.Duration) error // injected for tests
+	Errorf   func(format string, args ...any)       // writes to stderr unless --quiet
+}
+
+// Run polls until ctx is cancelled or a fatal error occurs.
+// It returns nil on cancellation and the fatal *backend.Error otherwise.
+func Run(ctx context.Context, r Reader, opts Options) error
+```
+
+Loop behavior:
+
+1. Read immediately on start, then sleep `Interval` between reads.
+2. Compute a change key for the result. Emit only when the key differs from the previous emitted key. The first result is always emitted.
+3. Handle errors by kind:
+
+   | Kind | Behavior |
+   | --- | --- |
+   | `KindNothingPlaying`, `KindNotAvailable` | Treated as "nothing"; emits `nil` once on transition |
+   | `KindRateLimited` | No emission; sleep `RetryAfter` (or 5 s when unknown), then continue |
+   | `KindUnexpected` | No emission; print the error once per distinct message; after 5 consecutive failures, double the sleep up to 30 s; reset on success |
+   | `KindAuthRequired`, `KindPermissionDenied` | Fatal: print the error and return it (exit 5 or 6) |
+
+4. On SIGINT or SIGTERM, `main` cancels the context; `Run` returns nil and the process exits 0.
+
+Change key: `source`, `state`, `type`, the item identity (`uri` when present, otherwise `title`, `artist`, and `album` joined with the unit separator), and `device.name`. Position and `fetched_at` are excluded, so progress alone never emits a line. A transition to nothing has the key `"none"`.
+
+Emission per format:
+
+| Format | Item | Nothing playing |
+| --- | --- | --- |
+| `text` | One text line | One empty line |
+| `template` | One rendered line | One empty line |
+| `json` | One JSON object line (NDJSON) | The line `null` |
+
+Each line is written with one `Write` call to unbuffered stdout, so consumers see it immediately.
+
+### Polling intervals
+
+- Local sources: `--interval` (default 1 s, minimum 0.5 s).
+- Web source with `--source web`: `--interval` when given, otherwise `web_interval` (default 3 s); minimum 1 s.
+- `auto`: the local backend is read every `--interval`. The Web backend is wrapped in `resolve.Throttle(web, webInterval, now)`, which returns the previous Web result (or error) when called again within `webInterval`. Because the resolver skips Web while local is playing, Web is polled only while local is not playing.
+
+## Timeouts
+
+| Operation | Timeout | On timeout |
+| --- | --- | --- |
+| macOS `pgrep` | 1 s | `KindUnexpected` |
+| macOS `osascript` read | 2 s | `KindUnexpected`, hint "run `spmeta doctor`" |
+| macOS permission check in `doctor` | 120 s | Reported as "no answer" |
+| MPRIS connect plus `ListNames` | 500 ms each | `KindNotAvailable` |
+| MPRIS `GetAll` per player | 500 ms | Player skipped |
+| MPRIS overall read | 2 s | `KindUnexpected` |
+| Web API request | 5 s | Retried once after 1 s, then `KindUnexpected` |
+| Token request (exchange or refresh) | 10 s | `KindUnexpected` |
+| Login callback wait | 180 s | `KindAuthRequired` |
+
+## Configuration precedence
+
+Settings come from four layers, highest first: flags, then environment variables (`SPMETA_*`), then the configuration file, then built-in defaults. `internal/config` merges them into one `Settings` value; the CLI never reads the environment or file directly. Keys, paths, and variable names are listed in [cli.md](./cli.md).
+
+```go
+type Settings struct {
+	Source      string        // auto | local | web
+	Format      string        // text | json | template
+	Template    string
+	Player      string
+	Interval    time.Duration // zero means "use the source default"
+	WebInterval time.Duration
+	ClientID    string
+	ConfigPath  string
+	TokenPath   string
+	Debug       bool
+	Quiet       bool
+	Watch       bool
+}
+```
+
+`config.Load(args Flags, env func(string) string, readFile func(string) ([]byte, error)) (Settings, error)` takes its inputs as parameters so tests never touch the real environment or home directory.
+
+## Logging and secrets
+
+- `--debug` enables a `log/slog` text handler on stderr at debug level; otherwise logging is discarded.
+- Debug output includes backend selection, the MPRIS player chosen, `osascript` exit status and stderr, HTTP method, path, status, and duration.
+- Debug output never includes access tokens, refresh tokens, authorization codes, PKCE verifiers, `Authorization` headers, or token-endpoint bodies. Only the token package handles those values, and it never passes them to the logger. A test runs a full fake login and refresh with `--debug` and asserts that no secret value appears in stderr.
+
+## Dependency boundaries
+
+Allowed imports between internal packages (an arrow means "may import"):
+
+```text
+cmd/spmeta        -> cli
+cli               -> config, format, resolve, watch, doctor, auth, backend, backend/*, model
+doctor            -> backend, backend/*, auth, config, model
+watch             -> backend, model
+resolve           -> backend, model
+backend/local     -> backend/macos, backend/mpris
+backend/web       -> auth, backend, model
+backend/macos     -> backend, model
+backend/mpris     -> backend, model
+auth              -> backend (error kinds only)
+format            -> model
+config, model     -> standard library only (config also BurntSushi/toml)
+```
+
+Rules:
+
+- Only `backend/mpris/dbus_linux.go` imports `github.com/godbus/dbus/v5`.
+- Only `internal/config` imports `github.com/BurntSushi/toml`.
+- Only `backend/web` and `auth` import `net/http`.
+- Only `backend/macos` (and `auth`, for opening the browser) import `os/exec`.
+- No package imports `internal/cli`.
+
+## Platform selection
+
+`internal/backend/local` chooses the local backend with build-constrained files: `local_darwin.go` returns the macOS backend, `local_linux.go` returns the MPRIS backend, and `local_other.go` (`//go:build !darwin && !linux`) returns a backend whose `Read` always returns `KindNotAvailable` with "unsupported platform." The macOS parser and the MPRIS mapping and selection code carry no build tags, so their unit tests run on both CI operating systems.
+
+## Version information
+
+`cmd/spmeta/main.go` declares `version`, `commit`, and `date` string variables, defaulting to `"dev"`, `""`, and `""`. Release builds set them with `-ldflags "-X main.version=... -X main.commit=... -X main.date=..."`. When `version` is `"dev"`, `main` falls back to `debug.ReadBuildInfo()`: the module version (for `go install ...@v0.1.0`) and the `vcs.revision` and `vcs.time` settings. `main` passes the result to `cli.Run` as a `BuildInfo` value.
