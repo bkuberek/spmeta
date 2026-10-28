@@ -180,7 +180,7 @@ func TestQuietSilencesEverythingButUsageErrors(t *testing.T) {
 			t.Errorf("exit=%d stderr=%q, want 2 and usage hint", code, stderr)
 		}
 	})
-	t.Run("no backend message is silenced", func(t *testing.T) {
+	t.Run("unavailable message is silenced", func(t *testing.T) {
 		code, stdout, stderr := run(t, "--quiet")
 		if code != 4 || stdout != "" || stderr != "" {
 			t.Errorf("exit=%d stdout=%q stderr=%q, want 4 and nothing", code, stdout, stderr)

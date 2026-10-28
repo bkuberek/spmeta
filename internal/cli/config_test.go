@@ -151,10 +151,14 @@ func TestMissingExplicitConfigFileIsUsageError(t *testing.T) {
 	}
 }
 
-func TestRootWithoutBackendStillExits4WithSettings(t *testing.T) {
-	code, _, stderr := runConfigured(t, nil, nil, nil, "--source", "web", "--player", "mpd")
-	if code != 4 || !strings.Contains(stderr, "no source available in this build") {
+func TestRootWebWithoutBackendStillExits4WithSettings(t *testing.T) {
+	fake := &fakeBackend{np: playing()}
+	code, _, stderr := runConfigured(t, fake, nil, nil, "--source", "web", "--player", "mpd")
+	if code != 4 || !strings.Contains(stderr, "Web mode is not available in this version") {
 		t.Errorf("exit=%d stderr=%q, want 4", code, stderr)
+	}
+	if fake.calls != 0 {
+		t.Errorf("local read %d times, want 0", fake.calls)
 	}
 }
 

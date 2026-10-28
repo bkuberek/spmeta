@@ -167,6 +167,8 @@ type Resolver struct {
 	Mode  Mode
 	Local backend.Backend // never nil; local_other.go returns an always-NotAvailable backend
 	Web   backend.Backend // nil when Web is not configured (no token file) or not built
+
+	Logger *slog.Logger // debug line per source read; nil discards
 }
 
 func (r *Resolver) Read(ctx context.Context) (model.NowPlaying, error)
@@ -189,7 +191,7 @@ For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is ni
 
 Error precedence for `Worse`, highest first: `KindPermissionDenied`, `KindAuthRequired`, `KindRateLimited`, `KindUnexpected`, `KindNothingPlaying`, `KindNotAvailable`. A nil error has the lowest precedence. When both errors have the same kind, the local error wins.
 
-Each backend read runs under its own timeout (see Timeouts). The resolver itself adds no deadline.
+Each backend read runs under its own timeout (see Timeouts). The resolver itself adds no deadline. Under `--debug` the resolver logs one line per source read (source, backend, state or error kind and message) and one line when it skips Web; backends do not log.
 
 ## Watch loop
 

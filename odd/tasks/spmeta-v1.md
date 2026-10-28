@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T6 done; T7 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T6 and T8 done; T7 Linux run pending; T9 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -171,7 +171,15 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T8 Resolver and local wiring
 
-- [ ] T8 complete
+- [x] T8 complete
+- Evidence (2026-10-27): RED (`internal/resolve` had no files; `cli.WithWebBackend` and `cli.WithLocalFactory` were undefined), then a lost `backend=` debug attribute was fixed. GREEN `go test -race -count=1 ./...` passes. The resolver table covers every ADR 0005 row, with fake Web backends, plus all 15 error-precedence pairs in both orders. `go vet` passes on darwin and linux, and `golangci-lint` reports 0 issues. godbus is in the Linux binary only.
+
+  Acceptance on this Mac, re-run by the parent (Spotify paused):
+  - `spmeta` prints `⏸ So Cold - Remix — Breaking Benjamin · We Are Not Alone (1:48 / 4:33)` and exits 0.
+  - The template output works.
+  - `--source web` exits 4 with "Web mode is not available in this version".
+
+  Debug logging lives at the resolver level, one line per source read; backends are unchanged. The default CLI test helper injects a not-running fake, so no CLI test can reach osascript or D-Bus. Actual: about 510 lines against a 300 forecast.
 - Goal: `--source auto|local|web` per [ADR 0005](../../docs/decisions/0005-auto-source-resolution.md), with `auto` meaning local only until Web exists.
 - Files: `internal/resolve/{resolve.go,resolve_test.go}`, `internal/cli/read.go` (build the resolver from `local.New`, pass `--player`).
 - Test-first: RED resolver table covering every ADR 0005 row with fake local and Web backends (Web paths exercised now even though the CLI passes nil), error precedence pairs, `--source web` with nil Web returns exit 4 "Web mode is not available in this version".
@@ -223,6 +231,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 - Files: `internal/auth/{login.go,login_test.go}`, `internal/cli/{auth.go,auth_test.go}`, `internal/cli/usage.go`.
 - Test-first: RED login tests with an injected opener calling the callback: success, state mismatch ignored, `error=access_denied` exit 5, 180 s timeout (injected clock) exit 5, redirect URI byte-identical, port in use exit 1; command tests for missing Client ID (setup text, exit 2), logout idempotent, status output and exit 0 versus 4, expiry warning within 14 days, mode warning.
 - Acceptance: one real login against a Spotify app on this Mac succeeds (manual, recorded in the findings log).
+- Note (from T8): `internal/resolve` hardcodes "Web mode is not available in this version" for a nil Web backend; once Web exists, `--source web` without a token must say it is not logged in and hint `spmeta auth login` (exit 4).
 - Route: delegated (4 non-trivial files).
 - Depends on: T11.
 - Forecast: 400 lines.
@@ -323,4 +332,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T7 godbus adapter and integration test (delegated writer; needs a Linux container).
+T9 Watch mode (delegated writer). T7 Linux integration run pending Docker Desktop.

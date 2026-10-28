@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"strings"
 
 	"github.com/bkuberek/spmeta/internal/backend"
+	"github.com/bkuberek/spmeta/internal/backend/local"
 	"github.com/bkuberek/spmeta/internal/config"
 	"github.com/bkuberek/spmeta/internal/format"
 	"github.com/bkuberek/spmeta/internal/model"
+	"github.com/bkuberek/spmeta/internal/resolve"
 )
 
 const (
@@ -28,8 +31,9 @@ const warningPrefix = "spmeta: warning: "
 type Option func(*options)
 
 type options struct {
-	backend backend.Backend
-	env     config.Env
+	newLocal func(local.Settings) backend.Backend
+	web      backend.Backend
+	env      config.Env
 }
 
 // WithEnv replaces the process environment, home directory and filesystem
@@ -38,10 +42,23 @@ func WithEnv(env config.Env) Option {
 	return func(o *options) { o.env = env }
 }
 
-// WithBackend sets the backend the root command reads. Without it the read
-// exits 4: production builds have no source until the resolver exists.
+// WithLocalFactory replaces the constructor of the local backend, which
+// defaults to local.New. It receives the local settings resolved from flags,
+// environment and configuration file.
+func WithLocalFactory(f func(local.Settings) backend.Backend) Option {
+	return func(o *options) { o.newLocal = f }
+}
+
+// WithBackend sets the local backend the root command reads, in place of the
+// one for this operating system. Tests use it to avoid osascript and D-Bus.
 func WithBackend(b backend.Backend) Option {
-	return func(o *options) { o.backend = b }
+	return WithLocalFactory(func(local.Settings) backend.Backend { return b })
+}
+
+// WithWebBackend sets the Web backend. Production builds have none, so
+// --source web reports that Web mode is not available.
+func WithWebBackend(b backend.Backend) Option {
+	return func(o *options) { o.web = b }
 }
 
 // renderFunc turns the current item (nil when nothing is playing) into the
@@ -129,16 +146,23 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	}
 	log.Debug("settings", "config", settings.ConfigPath, "source", settings.Source, "format", settings.Format)
 
-	b := opts.backend
+	if settings.Player != "" && runtime.GOOS != "linux" {
+		log.Debug("player ignored: only the Linux backend selects a player", "player", settings.Player, "os", runtime.GOOS)
+	}
+	newLocal := opts.newLocal
+	if newLocal == nil {
+		newLocal = local.New
+	}
+	resolver := &resolve.Resolver{
+		Mode:   resolve.Mode(settings.Source),
+		Local:  newLocal(local.Settings{Player: settings.Player}),
+		Web:    opts.web,
+		Logger: log,
+	}
 	var np *model.NowPlaying
-	if b == nil {
-		err = &backend.Error{Kind: backend.KindNotAvailable, Message: "no source available in this build"}
-	} else {
-		log.Debug("reading", "source", b.Source(), "format", settings.Format)
-		var item model.NowPlaying
-		if item, err = b.Read(ctx); err == nil {
-			np = &item
-		}
+	item, err := resolver.Read(ctx)
+	if err == nil {
+		np = &item
 	}
 
 	// Only a clean read or "nothing playing" produces stdout; in JSON the

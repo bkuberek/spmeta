@@ -13,7 +13,7 @@ import (
 func run(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"}, cli.WithEnv(config.Env{}))
+	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"}, cli.WithBackend(&fakeBackend{err: errNotRunning}), cli.WithEnv(config.Env{}))
 	return code, out.String(), errOut.String()
 }
 
@@ -100,15 +100,15 @@ func TestRunHelpUnknownTopic(t *testing.T) {
 	}
 }
 
-func TestRunRootWithoutSource(t *testing.T) {
-	code, stdout, stderr := run(t)
+func TestRunRootWebWithoutBackend(t *testing.T) {
+	code, stdout, stderr := run(t, "--source", "web")
 	if code != 4 {
 		t.Fatalf("exit = %d, want 4", code)
 	}
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "no source available in this build") {
-		t.Errorf("stderr = %q, want %q", stderr, "no source available in this build")
+	if want := "spmeta: Web mode is not available in this version\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
