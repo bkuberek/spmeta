@@ -106,7 +106,9 @@ tell application id "com.spotify.client"
 end tell
 ```
 
-This exact script was compiled with `osacompile` and run against Spotify.app on October 27, 2026 while a track was playing; it returned an `OK` record with 13 fields (see "Second probe" in [macos-applescript.md](../research/macos-applescript.md)). Task T5 still records a fresh raw output as the `track-playing.txt` fixture source.
+This exact script was compiled with `osacompile` and run against Spotify.app on October 27, 2026 while a track was playing; it returned an `OK` record with 13 fields (see "Second probe" in [macos-applescript.md](../research/macos-applescript.md)). Task T5 recorded a live paused capture as `track-paused.txt`; `track-playing.txt` is derived from it (marked synthetic) until a live capture is taken while a track plays.
+
+Latency, measured on October 27, 2026 against Spotify.app 1.3.4.258: the full script takes 0.22–0.27 s per read (each property read is one Apple event, about 5 ms). Precompiling the script with `osacompile` saves nothing measurable, and fetching all fields at once with `properties of current track` is not supported by Spotify (error -10000, also from JXA), so the per-property script stays.
 
 AppleScript integers are limited to 536,870,911; larger values become reals and render in exponent notation. Durations and positions stay far below that limit (149 hours); a value that does not parse as an integer becomes null.
 

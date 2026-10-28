@@ -38,9 +38,9 @@ Stdout fixtures use the read script's output format with real U+001F separators.
 
 | Fixture | Represents | Provenance |
 | --- | --- | --- |
-| `track-playing.txt` | "Amazone" by Alvan, playing, all fields | Live probe (values from the first probe, framing from the second) |
+| `track-playing.txt` | `track-paused.txt` with the state changed to `playing`, all fields | Synthetic, derived from the live paused capture; replace with a live capture while Spotify plays (pending) |
 | `track-playing-2.txt` | Second probe record, Lofuu | Live probe |
-| `track-paused.txt` | Same track, `paused` | Synthetic |
+| `track-paused.txt` | "So Cold - Remix" by Breaking Benjamin, `paused`, all fields | Live probe (raw `osascript` output, Spotify 1.3.4.258, October 27, 2026) |
 | `stopped.txt` | `STOPPED` | Synthetic |
 | `no-track.txt` | `NO_TRACK` | Synthetic |
 | `not-running.txt` | `NOT_RUNNING` | Synthetic |

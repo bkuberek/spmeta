@@ -71,6 +71,10 @@ OK|playing|novacaine (addicted to you) - sped up|Lofuu|thinkin bout you (novacai
 
 This confirms the `on txt(v)` handler, the top-level `running` check, the `try` wrappers, the 13-field framing, and that the script compiles without the reserved `st`. Latency was not measured in this run.
 
+### Third probe: T5 backend capture (observed live)
+
+During T5, the same script ran through the Go backend with Spotify.app paused. The raw output is stored as `internal/backend/macos/testdata/track-paused.txt`: state `paused`, 13 fields, duration `273440` ms, position `108905` ms, `id` and `spotify url` both `spotify:track:...`, `artwork url` on `i.scdn.co`. Paused state and the script framing behave as in the first two probes. `osascript -` took 0.22 to 0.24 s wall time over 5 runs (script compile included), and a full Go read measured 0.25 to 0.27 s, so the 300 ms budget has little headroom on this machine. A capture while a track plays is still pending.
+
 ### Not probed
 
 These scenarios remain in the manual test matrix in [testing.md](../design/testing.md): podcast episode, ad, local file, paused, Automation denied (exact error text for -1743), Spotify quit (no launch), Spotify Connect to another device, and a hung app.

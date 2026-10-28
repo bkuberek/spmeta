@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T4 done; T5 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T5 done; T6 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -116,7 +116,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T5 macOS backend
 
-- [ ] T5 complete
+- [x] T5 complete
+- Evidence (2026-10-27): RED build failure (`Runner`, `Backend`, `New`, `readScript`, `ExecRunner` undefined); GREEN `go test -race -count=1 ./...` passes, covering all 16 fixtures, the error mapping for -1743, -600, -1712, unknown numbers, the deadline and cancellation, and no script running when Spotify is not running. Linux and Windows builds compile; `golangci-lint run` 0 issues. The live test (`SPMETA_LIVE=1`) passes against the running Spotify in 0.27 s. A harness outside the repo read the paused track, and its JSON validated against the schema. Parent re-ran tests, lint and the live test and found no stray files. Pending: a live capture while a track plays (`track-playing.txt` is synthetic, derived from the live paused capture). Not in T5: `CheckPermission` (T10 doctor) and `--debug` diagnostics for the backend (T8 wiring). Actual: 974 Go lines (493 tests) plus 16 fixtures, against a 450 forecast.
 - Goal: read Spotify.app through the guarded AppleScript, never launching it.
 - Files: `internal/backend/macos/{runner.go,script.go,parse.go,macos.go,*_test.go,testdata/*}`, `internal/backend/local/{local_darwin.go,local_other.go}`.
 - Test-first: RED parser tests for every macOS fixture in [testing.md](../../docs/design/testing.md); error-mapping tests (-1743, -600, -1712, deadline, unknown number); a test proving no script runs when `ProcessRunning` returns false; GREEN with the exact script from [backend-macos.md](../../docs/design/backend-macos.md).
@@ -298,6 +299,8 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 - 2026-10-27: Second live probe (P9): the exact read script in `docs/design/backend-macos.md` compiles with `osacompile` and returns a 13-field `OK` record against Spotify.app (recorded in `docs/research/macos-applescript.md`).
 - 2026-10-27: PRD inconsistencies corrected in P10: `artist` join separator typo (`" ,  "` → `", "`), FR-6 versus the edge-case table on `auto`, unnecessary `user-read-currently-playing` scope, missing `--player` in the CLI synopsis, "not logged in" listed under exit 4 while exit 5 says "auth required" (resolved as above).
 
+- 2026-10-27: macOS latency (T5): the full read script takes 0.22–0.27 s (budget 300 ms); precompiling with `osacompile` gives no gain; `properties of current track` fails with -10000 in AppleScript and JXA, so all fields cannot be fetched in one Apple event.
+
 ## Next step
 
-T5 macOS backend (delegated writer).
+T6 MPRIS selection and mapping (delegated writer).
