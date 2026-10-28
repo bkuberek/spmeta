@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T5 done; T6 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T6 done; T7 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -128,7 +128,20 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T6 MPRIS selection and mapping
 
-- [ ] T6 complete
+- [x] T6 complete
+- Evidence (2026-10-27): RED build failure (`Properties`, `Bus`, `DialFunc`, `Backend` undefined); GREEN `go test -race -count=1 ./...` passes (also with `-count=5` for the mpris package). Coverage:
+  - selection: dot-boundary matching, preference order, `Playing` wins, sorted tie-break, failing and timed-out `GetAll` skipped, `--player` with full suffixes, browsers ignored;
+  - mapping for every fixture, and the position rule across several reads;
+  - timeouts, cancellation, and closing a connection that arrives after its timeout.
+
+  Ten golden files validate against the schema. Checks: `go vet` passes on darwin and linux, `golangci-lint run` reports 0 issues, and no test-only or godbus dependency is in the binary.
+
+  Parent correction (test-first, RED observed): Linux local files were mapped to `type: unknown` and lost any `spotify:local:` URI, which contradicts data-model.md and the macOS backend. Now:
+  - a `spotify:local:` trackid is kept as the URI;
+  - every local file (a `/local/` trackid path or a `file://` URL) is `type: track`;
+  - data-model.md documents that the URI is null when only an object path exists.
+
+  `Bus` seam for T7: `ListNames`, `GetAll(busName) Properties`, `Close`, with variants already unwrapped (int64 µs, `[]string`, object paths as strings). Actual: 1,734 Go lines (1,153 tests) plus 10 golden files, against a 450 forecast.
 - Goal: Linux player selection, metadata mapping, trackid normalization and the Spotify desktop position rule, against a fake `Bus`.
 - Files: `internal/backend/mpris/{bus.go,select.go,mapping.go,mpris.go,fixtures_test.go,select_test.go,mapping_test.go,mpris_test.go,testdata/*}`.
 - Test-first: RED selection tests (dot-boundary, preference order, `Playing` wins, sorted tie-break, failing `GetAll` skipped, `--player`), mapping tests for every MPRIS fixture, position rule across two reads; GREEN per [backend-linux.md](../../docs/design/backend-linux.md).
@@ -303,4 +316,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T6 MPRIS selection and mapping (delegated writer).
+T7 godbus adapter and integration test (delegated writer; needs a Linux container).

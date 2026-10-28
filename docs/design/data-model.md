@@ -135,7 +135,7 @@ When the selected player's bus-name suffix is exactly `spotify` (the desktop cli
 
 ### Local files
 
-`spotify:local:...` URIs keep `uri`, set `type: track`, and leave `url` and `artwork_url` null. On the Web source, `item.is_local` is true and `external_urls` may be empty.
+`spotify:local:...` URIs keep `uri`, set `type: track`, and leave `url` and `artwork_url` null. On the Web source, `item.is_local` is true and `external_urls` may be empty. On MPRIS, a local file is recognized by a `spotify:local:` trackid, a `/local/` trackid path, or a `file://` `xesam:url`; it is always `type: track`, and `uri` is null when the player exposes only an object path, which cannot be turned back into a `spotify:local:` URI.
 
 ### Ads
 

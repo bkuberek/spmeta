@@ -57,7 +57,7 @@ Stdout fixtures use the read script's output format with real U+001F separators.
 
 ### MPRIS (`internal/backend/mpris/testdata/` and `fixtures_test.go`)
 
-`Properties` inputs are Go literals in `fixtures_test.go`, because value types matter (`int64` versus `uint64`, string versus list). Expected outputs are golden JSON files.
+`Properties` inputs are Go literals in `fixtures_test.go`, because value types matter (`int64` versus `uint64`, string versus list). Expected outputs are golden JSON files named in snake case (`spotify_desktop_playing.json`), produced by reading each fixture through a fake `Bus` and validated against the schema.
 
 | Fixture | Represents | Provenance |
 | --- | --- | --- |
@@ -65,11 +65,13 @@ Stdout fixtures use the read script's output format with real U+001F separators.
 | `spotifyDesktopStringTrackID` | trackid as the string `spotify:track:<id>` | Research (KDE report, unconfirmed) |
 | `spotifyDesktopEpisode` | trackid `/com/spotify/episode/<id>` | Synthetic |
 | `spotifyDesktopAd` | trackid `spotify:ad:<id>`, empty artist | Synthetic |
+| `spotifyDesktopLocalFile` | trackid `/com/spotify/local/<hash>`, `xesam:url` `file:///...`: `uri` and `url` null, `type: unknown` | Synthetic; shape unverified |
 | `spotifydPlaying` | Bus `spotifyd.instance1234`, trackid `/spotify/track/<id>`, nonzero `Position` | Research (spotifyd source) |
 | `ncspotPlaying` | Bus `ncspot.instance99`, trackid `/org/ncspot/spotify/track/<id>`, `xesam:url` set | Research (ncspot source) |
 | `spotifyPlayerNoTrackID` | Bus `spotify_player`, no trackid, `xesam:url` set | Research (spotify_player source) |
 | `noTrack` | trackid `/org/mpris/MediaPlayer2/TrackList/NoTrack` | Research (MPRIS specification) |
 | `paused`, `stoppedWithItem`, `stoppedEmpty` | `PlaybackStatus` variants | Synthetic |
+| `emptyMetadata`, `missingMetadata`, `noTrackWithTitle`, missing fields | Nothing-playing and sparse shapes | Synthetic |
 | `artistAsString`, `lengthAsUint64`, `lengthAsDouble` | Off-spec value types | Synthetic |
 | Selection name lists | `[firefox.instance1, spotify]`; `[spotifyd.instance10, spotifyd.instance9 (Playing)]`; `[spotify (GetAll fails), spotifyd.instance1]`; `[spotifydx]`; `--player firefox` | Synthetic |
 

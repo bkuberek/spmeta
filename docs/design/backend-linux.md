@@ -27,6 +27,8 @@ func (b *Backend) Read(ctx context.Context) (model.NowPlaying, error)
 func (b *Backend) Players(ctx context.Context) ([]PlayerInfo, error)
 ```
 
+`PlayerInfo` has `Name` (the bus name suffix), `Status` (`PlaybackStatus`, empty when the player did not answer), and `Selected`. `DialFunc` receives the context of the whole read, which stays live until `Read` returns, so an adapter may tie the connection to it; `Read` itself bounds the dial by the 500 ms connect timeout and closes a connection that arrives late. A `*backend.Error` returned by the dial passes through unchanged; any other dial error becomes `NotAvailable` "could not reach the D-Bus session bus".
+
 `dbus_linux.go` provides `Dial`, the production `DialFunc`. `local_linux.go` calls `mpris.New(mpris.Dial, settings.Player, time.Now)`.
 
 ## Session bus discovery
