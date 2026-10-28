@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1 in progress). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1 done; T2 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -68,7 +68,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T1 Scaffold
 
-- [ ] T1 complete
+- [x] T1 complete
+- Evidence (2026-10-27): RED `go test ./...` failed with "no non-test Go files in internal/cli" (missing symbols), then `TestRunUnknownFlag` failed on the `--bogus` message; GREEN `go test -race ./...` passes. `go vet` clean, `golangci-lint run` 0 issues, `actionlint` clean. Parent spot check re-ran tests, lint and the built binary's exit codes (read 4, `--bogus` 2, `-h` 0, `version` 0). Parent bumped CI actions to the current majors after reviewing their release notes (checkout v7, setup-go v7, golangci-lint-action v9, semantic-pull-request v6; the only breaking change was the Node 24 runtime). Actual: 470 authored lines. Receipt-driven review off. Commit: see git log (`feat(cli): scaffold ...`).
 - Goal: a buildable module with CLI dispatch, version output, lint and CI, including the Conventional Commits check.
 - Files: `go.mod` (`module github.com/bkuberek/spmeta`, `go 1.26`), `cmd/spmeta/main.go` (version vars, `debug.ReadBuildInfo` fallback, signal context), `internal/cli/{cli.go,usage.go,exit.go,cli_test.go}`, `.golangci.yml` (v2 format), `.github/workflows/ci.yml` (jobs `test`, `lint`, `commits`), `.gitignore`, `CLAUDE.md` (conventions), `README.md` (stub), `LICENSE` (if confirmed).
 - Test-first: RED `TestRunVersion` (prints `spmeta dev (`, exit 0), `TestRunHelp` (exit 0), `TestRunUnknownFlag` and `TestRunUnknownCommand` (exit 2); GREEN after dispatch is implemented. CI and lint configuration are structural (no RED).
@@ -230,6 +231,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 - Files: `release-please-config.json`, `.release-please-manifest.json`, `.github/workflows/release.yml`, `.goreleaser.yaml`, `.github/workflows/ci.yml` (`release-check` job), `README.md` (install section), `LICENSE` (if not added in T1).
 - Test-first exception: configuration only; no runnable RED. Checks instead: `goreleaser check`, `goreleaser release --snapshot --clean --skip=publish` (artifacts for four targets, binary prints the injected version), plus the three standard checks.
 - Acceptance: snapshot build produces 4 archives, `checksums.txt`, 2 `.deb` and 2 `.rpm`; `./dist/spmeta_darwin_arm64*/spmeta version` shows the snapshot version from `-ldflags`; the first release commit carries `Release-As: 0.1.0`. Publishing requires the user steps in release.md.
+- Note (2026-10-27): before pinning, read the release notes of `googleapis/release-please-action` v5 (latest v5.0.0; release.md shows v4) and `goreleaser/goreleaser-action` v7 (latest v7.3.0; release.md shows v6) for breaking input changes.
 - Route: delegated (5 non-trivial files).
 - Depends on: T10 (local-only cut) or T14 (full release).
 - Forecast: 250 lines.
@@ -294,4 +296,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T1 Scaffold (delegated writer).
+T2 Model, typed errors, and JSON Schema (delegated writer).

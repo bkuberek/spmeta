@@ -1,0 +1,14 @@
+version: "2"
+
+linters:
+  # The default set (errcheck, govet, ineffassign, staticcheck, unused) plus:
+  enable:
+    - errorlint # %w wrapping and errors.Is/As instead of == and type assertions
+    - gocritic # common correctness and style mistakes
+    - misspell # typos in comments and strings
+    - revive # idiomatic Go naming and exported-symbol docs
+    - unconvert # redundant type conversions
+
+formatters:
+  enable:
+    - gofumpt # stricter gofmt

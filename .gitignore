@@ -1,0 +1,11 @@
+# Build output
+/spmeta
+/dist/
+
+# Test and coverage output
+*.out
+coverage.*
+
+# Local tool configuration; never commit
+.claude/odoo-timesheet/
+.claude/*.local.json
