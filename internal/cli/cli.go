@@ -8,6 +8,8 @@ import (
 	"flag"
 	"io"
 	"strings"
+
+	"github.com/bkuberek/spmeta/internal/backend"
 )
 
 // Run executes spmeta with args (without the program name) and returns the
@@ -65,5 +67,5 @@ func runRoot(_ context.Context, args []string, stdout, stderr io.Writer, info Bu
 
 	// Backends arrive in later tasks; until then there is nothing to read.
 	_, _ = io.WriteString(stderr, "spmeta: no source available in this build\n")
-	return exitNoSource
+	return backend.ExitCode(backend.KindNotAvailable)
 }

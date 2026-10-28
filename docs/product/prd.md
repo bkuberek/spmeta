@@ -119,7 +119,7 @@ Only the Web backend touches the network, and only after `auth login`; the two l
 
 ## Output data model
 
-Every backend maps into one `NowPlaying` object; JSON output is that object, and `schema_version` lets scripts detect changes. Full field rules: [data-model.md](../design/data-model.md); schema: [spmeta.schema.json](../design/spmeta.schema.json) (JSON Schema draft 2020-12).
+Every backend maps into one `NowPlaying` object; JSON output is that object, and `schema_version` lets scripts detect changes. Full field rules: [data-model.md](../design/data-model.md); schema: [spmeta.schema.json](../../schema/spmeta.schema.json) (JSON Schema draft 2020-12).
 
 ```json
 {
@@ -383,7 +383,7 @@ spmeta/
     resolve/                    # auto / local / web selection
     watch/                      # change detection loop
     doctor/                     # source checks
-  schema/spmeta.schema.json     # JSON Schema (moved from docs/design in T2)
+  schema/spmeta.schema.json     # JSON Schema
   docs/                         # product, research, decisions, design
   odd/tasks/spmeta-v1.md        # implementation task list
   CLAUDE.md                     # conventions: go test, go vet, golangci-lint, Conventional Commits

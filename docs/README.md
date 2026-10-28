@@ -55,7 +55,7 @@ The [decision index](./decisions/README.md) lists all ADRs and their status. ADR
 | [architecture.md](./design/architecture.md) | Package layout, `Backend` interface, typed errors, resolver, watch loop, configuration precedence, dependency rules |
 | [cli.md](./design/cli.md) | Commands, flags, output formats, template syntax, exit codes, environment, configuration, integration examples |
 | [data-model.md](./design/data-model.md) | `NowPlaying` fields, null rules, per-source mapping |
-| [spmeta.schema.json](./design/spmeta.schema.json) | JSON Schema (draft 2020-12) for JSON output; moves to `schema/` in task T2 |
+| [spmeta.schema.json](../schema/spmeta.schema.json) | JSON Schema (draft 2020-12) for JSON output |
 | [backend-macos.md](./design/backend-macos.md) | AppleScript backend: process guard, script, parser, errors |
 | [backend-linux.md](./design/backend-linux.md) | MPRIS backend: bus discovery, D-Bus calls, selection, mapping |
 | [backend-web.md](./design/backend-web.md) | Web backend and PKCE authentication |

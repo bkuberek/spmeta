@@ -67,7 +67,8 @@ internal/watch/
 internal/doctor/
   doctor.go               # collects source checks into a report
 schema/
-  spmeta.schema.json      # moved here from docs/design in T2
+  schema.go               # embeds the schema for tests in other packages
+  spmeta.schema.json      # JSON Schema for the JSON output
 testdata/ per package     # golden files and fixtures
 ```
 

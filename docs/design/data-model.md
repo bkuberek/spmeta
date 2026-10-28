@@ -1,6 +1,6 @@
 # Data model
 
-Every backend maps its source into one `NowPlaying` object. JSON output is that object, serialized on one line. This document defines the fields, their null rules, and how each source maps into them. The machine-readable contract is [spmeta.schema.json](./spmeta.schema.json) (JSON Schema draft 2020-12).
+Every backend maps its source into one `NowPlaying` object. JSON output is that object, serialized on one line. This document defines the fields, their null rules, and how each source maps into them. The machine-readable contract is [spmeta.schema.json](../../schema/spmeta.schema.json) (JSON Schema draft 2020-12).
 
 ## Contract
 
@@ -12,7 +12,7 @@ The object is public API ([ADR 0001](../decisions/0001-audience-build-vs-wrap.md
 - Key order in the output is the order in the table below.
 - When nothing is playing, `--format json` prints the literal `null` and exits 3. In watch mode, `null` is one NDJSON line.
 
-The schema file lives at `docs/design/spmeta.schema.json` during planning. Task T2 moves it to `schema/spmeta.schema.json` (the path in its `$id`) and updates every link.
+The schema file lives at `schema/spmeta.schema.json`, the path in its `$id`.
 
 ## Example
 

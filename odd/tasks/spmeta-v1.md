@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1 done; T2 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T2 done; T3 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -80,7 +80,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T2 Model, typed errors, and JSON Schema
 
-- [ ] T2 complete
+- [x] T2 complete
+- Evidence (2026-10-27): RED `go test ./...` failed with "no non-test Go files" in `internal/backend`, `internal/model` and `schema` (missing symbols); GREEN `go test -race ./...` passes in all packages. Schema tests run with `AssertFormat()`; they accept the data-model example plus 4 valid cases and reject 12 invalid ones. `go vet` clean, `golangci-lint run` 0 issues, `jsonschema` absent from the binary's deps. Parent spot check: schema moved as a pure rename (`$id` intact), doc diffs are link-only, and tests, lint and the root exit 4 pass on re-run. Choices beyond the docs: the schema is embedded in package `schema` for T3 golden tests; `backend.ExitCode` is the single source of exit codes (the CLI keeps only `exitOK` and `exitUsage`); `Normalize` returns copies and sets `schema_version`. Actual: about 1,050 authored lines (table-driven tests) against a 400 forecast.
 - Goal: the `NowPlaying` model with normalization, the typed error kinds and exit codes, and the schema at its permanent path.
 - Files: `internal/model/{nowplaying.go,normalize.go,duration.go,*_test.go}`, `internal/backend/{backend.go,errors.go,errors_test.go}`, move `docs/design/spmeta.schema.json` to `schema/spmeta.schema.json`, `schema/schema_test.go` (package `schema_test`), update schema links in `docs/README.md`, `docs/design/data-model.md`, `docs/design/architecture.md`, `docs/design/testing.md`, `docs/product/prd.md`; add test-only dependency `github.com/santhosh-tekuri/jsonschema/v6`.
 - Test-first: RED tables for `Normalize` (empty strings, zero ints, artist join, type and URL derivation, second truncation), `OpenURL`, `ParseURI`, `FormatDuration` (`0:00`, `3:58`, `1:00:00`), `ExitCode` per kind, `Worse` precedence; schema test accepts the data-model example and rejects an empty title, a missing key, and `device` on `source: macos`.
@@ -296,4 +297,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T2 Model, typed errors, and JSON Schema (delegated writer).
+T3 Formatters and the read path (delegated writer).
