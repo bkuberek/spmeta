@@ -98,9 +98,22 @@ func TestReadParsesFixtures(t *testing.T) {
 			mutate:  func(*model.NowPlaying) {},
 		},
 		{
-			name:    "playing derived from paused",
+			name:    "live playing capture",
 			fixture: "track-playing.txt",
-			mutate:  func(np *model.NowPlaying) { np.State = model.StatePlaying },
+			mutate: func(np *model.NowPlaying) {
+				np.State = model.StatePlaying
+				np.Title = ptr("The Red")
+				np.Artists = []string{"Chevelle"}
+				np.Artist = ptr("Chevelle")
+				np.Album = ptr("Wonder What's Next (Expanded Edition)")
+				np.AlbumArtist = ptr("Chevelle")
+				np.TrackNumber = ptr(5)
+				np.DurationMS = ptr(int64(238400))
+				np.PositionMS = ptr(int64(29985))
+				np.URI = ptr("spotify:track:1gyee1JuFFiP476LQpRMYU")
+				np.URL = ptr("https://open.spotify.com/track/1gyee1JuFFiP476LQpRMYU")
+				np.ArtworkURL = ptr("https://i.scdn.co/image/ab67616d0000b273bd444869348f556430c21890")
+			},
 		},
 		{
 			name:    "second live probe",

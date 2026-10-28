@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T6 and T8 done; T7 Linux run pending; T9 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T6, T8 and T9 done; T7 Linux run pending; T10 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -117,7 +117,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 ### T5 macOS backend
 
 - [x] T5 complete
-- Evidence (2026-10-27): RED build failure (`Runner`, `Backend`, `New`, `readScript`, `ExecRunner` undefined); GREEN `go test -race -count=1 ./...` passes, covering all 16 fixtures, the error mapping for -1743, -600, -1712, unknown numbers, the deadline and cancellation, and no script running when Spotify is not running. Linux and Windows builds compile; `golangci-lint run` 0 issues. The live test (`SPMETA_LIVE=1`) passes against the running Spotify in 0.27 s. A harness outside the repo read the paused track, and its JSON validated against the schema. Parent re-ran tests, lint and the live test and found no stray files. Pending: a live capture while a track plays (`track-playing.txt` is synthetic, derived from the live paused capture). Not in T5: `CheckPermission` (T10 doctor) and `--debug` diagnostics for the backend (T8 wiring). Actual: 974 Go lines (493 tests) plus 16 fixtures, against a 450 forecast.
+- Evidence (2026-10-27): RED build failure (`Runner`, `Backend`, `New`, `readScript`, `ExecRunner` undefined); GREEN `go test -race -count=1 ./...` passes, covering all 16 fixtures, the error mapping for -1743, -600, -1712, unknown numbers, the deadline and cancellation, and no script running when Spotify is not running. Linux and Windows builds compile; `golangci-lint run` 0 issues. The live test (`SPMETA_LIVE=1`) passes against the running Spotify in 0.27 s. A harness outside the repo read the paused track, and its JSON validated against the schema. Parent re-ran tests, lint and the live test and found no stray files. Live playing capture recorded 2026-10-28 as `track-playing.txt` (raw `osascript` output of `readScript`, Chevelle "The Red"), replacing the synthetic fixture. Not in T5: `CheckPermission` (T10 doctor) and `--debug` diagnostics for the backend (T8 wiring). Actual: 974 Go lines (493 tests) plus 16 fixtures, against a 450 forecast.
 - Goal: read Spotify.app through the guarded AppleScript, never launching it.
 - Files: `internal/backend/macos/{runner.go,script.go,parse.go,macos.go,*_test.go,testdata/*}`, `internal/backend/local/{local_darwin.go,local_other.go}`.
 - Test-first: RED parser tests for every macOS fixture in [testing.md](../../docs/design/testing.md); error-mapping tests (-1743, -600, -1712, deadline, unknown number); a test proving no script runs when `ProcessRunning` returns false; GREEN with the exact script from [backend-macos.md](../../docs/design/backend-macos.md).
@@ -190,7 +190,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T9 Watch mode
 
-- [ ] T9 complete (code committed; manual track-change acceptance pending with the user)
+- [x] T9 complete (code e7992ff; manual acceptance 2026-10-28)
 - Evidence so far (2026-10-27):
   - RED: 25 watch subtests failed against a no-op `Run`; `resolve.Throttle` and `cli.WithClock` were undefined. GREEN: `go test -race -count=1 ./...` passes.
   - CLI coverage: text, template and NDJSON output (NDJSON validated against the schema, and `&`/`<` stay literal, which proves output goes through `format.JSON`), one `Write` per line, interval defaults, flags and config keys, Web throttling in auto mode, fatal exits 5 and 6, transient errors, and cancellation.
@@ -200,7 +200,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
     - `--watch --quiet` and `--interval` without `--watch` both exit 2.
   - Parent correction (test-first, RED observed as a 10 s test timeout): `--watch --source web` in a build without Web polled silently forever. `Resolver.Static()` now reports errors that cannot change during the run, so watch mode exits 4 at once. cli.md documents the exception.
   - Actual: about 1,230 lines (about 190 non-test) against a 350 forecast.
-- Pending: `spmeta --watch` while the user changes tracks; it should print exactly one line per change.
+- Manual acceptance (2026-10-28): `spmeta --watch --interval 1` on this Mac while the user played, skipped twice, paused and resumed printed exactly five lines, one per change (start, two track changes, pause, resume) and nothing between.
 - Goal: `--watch` with change detection, NDJSON, interval rules and signal handling.
 - Files: `internal/watch/{watch.go,watch_test.go}`, `internal/resolve/{throttle.go,throttle_test.go}`, `internal/cli/read.go` (`--watch`, `--interval` validation), `cmd/spmeta/main.go` (signal context).
 - Test-first: RED sequences per [architecture.md](../../docs/design/architecture.md) Watch loop: first emission, position-only change silent, track/state/device change emits, transition to nothing emits once, rate limit sleeps, unexpected errors deduplicated with backoff, fatal 5 and 6, cancellation returns nil; throttle returns cached results within the interval.
@@ -342,4 +342,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T9 Watch mode (delegated writer). T7 Linux integration run pending Docker Desktop.
+T10 Doctor and README (delegated writer). T7 Linux integration run pending Docker Desktop.
