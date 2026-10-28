@@ -190,7 +190,17 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T9 Watch mode
 
-- [ ] T9 complete
+- [ ] T9 complete (code committed; manual track-change acceptance pending with the user)
+- Evidence so far (2026-10-27):
+  - RED: 25 watch subtests failed against a no-op `Run`; `resolve.Throttle` and `cli.WithClock` were undefined. GREEN: `go test -race -count=1 ./...` passes.
+  - CLI coverage: text, template and NDJSON output (NDJSON validated against the schema, and `&`/`<` stay literal, which proves output goes through `format.JSON`), one `Write` per line, interval defaults, flags and config keys, Web throttling in auto mode, fatal exits 5 and 6, transient errors, and cancellation.
+  - Live runs on this Mac with Spotify paused:
+    - `--watch` printed one line, then stayed silent; SIGINT gave exit 0.
+    - JSON watch printed one NDJSON object; SIGTERM gave exit 0.
+    - `--watch --quiet` and `--interval` without `--watch` both exit 2.
+  - Parent correction (test-first, RED observed as a 10 s test timeout): `--watch --source web` in a build without Web polled silently forever. `Resolver.Static()` now reports errors that cannot change during the run, so watch mode exits 4 at once. cli.md documents the exception.
+  - Actual: about 1,230 lines (about 190 non-test) against a 350 forecast.
+- Pending: `spmeta --watch` while the user changes tracks; it should print exactly one line per change.
 - Goal: `--watch` with change detection, NDJSON, interval rules and signal handling.
 - Files: `internal/watch/{watch.go,watch_test.go}`, `internal/resolve/{throttle.go,throttle_test.go}`, `internal/cli/read.go` (`--watch`, `--interval` validation), `cmd/spmeta/main.go` (signal context).
 - Test-first: RED sequences per [architecture.md](../../docs/design/architecture.md) Watch loop: first emission, position-only change silent, track/state/device change emits, transition to nothing emits once, rate limit sleeps, unexpected errors deduplicated with backoff, fatal 5 and 6, cancellation returns nil; throttle returns cached results within the interval.

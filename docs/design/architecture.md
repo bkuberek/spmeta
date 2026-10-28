@@ -206,11 +206,13 @@ type Options struct {
 	Interval time.Duration                          // local poll interval
 	Emit     func(np *model.NowPlaying) error       // nil np means nothing playing
 	Sleep    func(ctx context.Context, d time.Duration) error // injected for tests
-	Errorf   func(format string, args ...any)       // writes to stderr unless --quiet
+	Errorf   func(format string, args ...any)       // one stderr line per call; nil discards
 }
 
-// Run polls until ctx is cancelled or a fatal error occurs.
-// It returns nil on cancellation and the fatal *backend.Error otherwise.
+// Run polls until ctx is cancelled or a fatal error occurs. It returns nil on
+// cancellation and the fatal *backend.Error otherwise, without printing it:
+// the CLI prints the returned error once and exits with its code. A failing
+// Emit also stops the loop with a KindUnexpected error.
 func Run(ctx context.Context, r Reader, opts Options) error
 ```
 
@@ -224,8 +226,8 @@ Loop behavior:
    | --- | --- |
    | `KindNothingPlaying`, `KindNotAvailable` | Treated as "nothing"; emits `nil` once on transition |
    | `KindRateLimited` | No emission; sleep `RetryAfter` (or 5 s when unknown), then continue |
-   | `KindUnexpected` | No emission; print the error once per distinct message; after 5 consecutive failures, double the sleep up to 30 s; reset on success |
-   | `KindAuthRequired`, `KindPermissionDenied` | Fatal: print the error and return it (exit 5 or 6) |
+   | `KindUnexpected` | No emission; print the error once per distinct message; from the 5th consecutive failure, double the sleep for each further failure (never above 30 s, or the interval when longer); reset on any read that reaches a source |
+   | `KindAuthRequired`, `KindPermissionDenied` | Fatal: return the error (the CLI prints it and exits 5 or 6) |
 
 4. On SIGINT or SIGTERM, `main` cancels the context; `Run` returns nil and the process exits 0.
 

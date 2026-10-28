@@ -31,6 +31,16 @@ type Resolver struct {
 	Logger *slog.Logger
 }
 
+// Static reports an error that every Read would return for the whole run,
+// such as --source web in a build without Web, so a caller can fail fast
+// instead of polling. It returns nil when reads may succeed.
+func (r *Resolver) Static() error {
+	if r.Mode == ModeWeb && r.Web == nil {
+		return &backend.Error{Kind: backend.KindNotAvailable, Source: model.SourceWeb, Message: webUnavailable}
+	}
+	return nil
+}
+
 // Read returns the current item per ADR 0005, or the highest-precedence error
 // among the sources it tried.
 func (r *Resolver) Read(ctx context.Context) (model.NowPlaying, error) {
@@ -40,9 +50,9 @@ func (r *Resolver) Read(ctx context.Context) (model.NowPlaying, error) {
 	case ModeLocal:
 		return r.read(ctx, "local", r.Local)
 	case ModeWeb:
-		if r.Web == nil {
+		if err := r.Static(); err != nil {
 			r.log().Debug("skipping source", "source", "web", "reason", "not configured")
-			return model.NowPlaying{}, &backend.Error{Kind: backend.KindNotAvailable, Source: model.SourceWeb, Message: webUnavailable}
+			return model.NowPlaying{}, err
 		}
 		return r.read(ctx, "web", r.Web)
 	default:

@@ -135,7 +135,7 @@ Every non-zero exit prints one `spmeta: <message>` line on stderr, optionally fo
 
 With `--source auto`, when no source returns an item, the exit code comes from the highest-precedence error: 6, then 5, then 7, then 1, then 3, then 4 ([ADR 0005](../decisions/0005-auto-source-resolution.md)).
 
-In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running.
+In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running. The one exception is a source that can never become available during the run, such as `--source web` in a build without Web: watch mode exits 4 at once instead of polling.
 
 ## Subcommands
 

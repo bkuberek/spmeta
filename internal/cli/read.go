@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/backend/local"
@@ -34,6 +35,8 @@ type options struct {
 	newLocal func(local.Settings) backend.Backend
 	web      backend.Backend
 	env      config.Env
+	sleep    func(context.Context, time.Duration) error
+	now      func() time.Time
 }
 
 // WithEnv replaces the process environment, home directory and filesystem
@@ -156,8 +159,17 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	resolver := &resolve.Resolver{
 		Mode:   resolve.Mode(settings.Source),
 		Local:  newLocal(local.Settings{Player: settings.Player}),
-		Web:    opts.web,
+		Web:    webBackend(settings, opts),
 		Logger: log,
+	}
+	if settings.Watch {
+		if err := resolver.Static(); err != nil {
+			printError(stderr, err)
+			return backend.ExitCode(backend.KindOf(err))
+		}
+		interval := pollInterval(settings, flags.Interval != nil)
+		log.Debug("watching", "interval", interval)
+		return runWatch(ctx, resolver, interval, render, stdout, stderr, opts)
 	}
 	var np *model.NowPlaying
 	item, err := resolver.Read(ctx)
