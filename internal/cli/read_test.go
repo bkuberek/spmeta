@@ -11,6 +11,7 @@ import (
 
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/cli"
+	"github.com/bkuberek/spmeta/internal/config"
 	"github.com/bkuberek/spmeta/internal/model"
 )
 
@@ -50,7 +51,7 @@ func playing() model.NowPlaying {
 func runWith(t *testing.T, b backend.Backend, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"}, cli.WithBackend(b))
+	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"}, cli.WithBackend(b), cli.WithEnv(config.Env{}))
 	return code, out.String(), errOut.String()
 }
 

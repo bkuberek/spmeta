@@ -5,6 +5,8 @@ package cli
 import (
 	"context"
 	"io"
+
+	"github.com/bkuberek/spmeta/internal/config"
 )
 
 // Run executes spmeta with args (without the program name) and returns the
@@ -22,7 +24,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info Buil
 			return runHelp(args[1:], stdout, stderr)
 		}
 	}
-	var o options
+	o := options{env: config.OSEnv()}
 	for _, opt := range opts {
 		opt(&o)
 	}

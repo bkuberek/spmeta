@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bkuberek/spmeta/internal/backend"
+	"github.com/bkuberek/spmeta/internal/config"
 	"github.com/bkuberek/spmeta/internal/format"
 	"github.com/bkuberek/spmeta/internal/model"
 )
@@ -20,11 +21,21 @@ const (
 	formatTemplate = "template"
 )
 
+// Warnings print as "spmeta: warning: <text>" on stderr.
+const warningPrefix = "spmeta: warning: "
+
 // Option customizes Run.
 type Option func(*options)
 
 type options struct {
 	backend backend.Backend
+	env     config.Env
+}
+
+// WithEnv replaces the process environment, home directory and filesystem
+// that configuration is read from. Tests use it to stay hermetic.
+func WithEnv(env config.Env) Option {
+	return func(o *options) { o.env = env }
 }
 
 // WithBackend sets the backend the root command reads. Without it the read
@@ -41,8 +52,13 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	fs := flag.NewFlagSet("spmeta", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	showVersion := fs.Bool("version", false, "")
-	formatName := fs.String("format", formatText, "")
+	source := fs.String("source", "", "")
+	formatName := fs.String("format", "", "")
 	tmplText := fs.String("template", "", "")
+	player := fs.String("player", "", "")
+	configFile := fs.String("config", "", "")
+	interval := fs.Float64("interval", 0, "")
+	watch := fs.Bool("watch", false, "")
 	quiet := fs.Bool("quiet", false, "")
 	debug := fs.Bool("debug", false, "")
 
@@ -68,18 +84,39 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 		return exitOK
 	}
 
-	explicit := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
-	if explicit["template"] && !explicit["format"] {
-		*formatName = formatTemplate
+	flags := config.Flags{Watch: *watch, Quiet: *quiet, Debug: *debug}
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "source":
+			flags.Source = source
+		case "format":
+			flags.Format = formatName
+		case "template":
+			flags.Template = tmplText
+		case "player":
+			flags.Player = player
+		case "config":
+			flags.Config = configFile
+		case "interval":
+			flags.Interval = interval
+		}
+	})
+	settings, err := config.Load(flags, opts.env)
+	if err != nil {
+		return usageError(stderr, "%v", err)
 	}
-	render, err := newRenderer(*formatName, *tmplText)
+	if !settings.Quiet {
+		for _, w := range settings.Warnings {
+			_, _ = io.WriteString(stderr, warningPrefix+w+"\n")
+		}
+	}
+	render, err := newRenderer(settings)
 	if err != nil {
 		return usageError(stderr, "%v", err)
 	}
 
 	log := slog.New(slog.DiscardHandler)
-	if *debug && !*quiet {
+	if settings.Debug && !settings.Quiet {
 		log = slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
@@ -90,13 +127,14 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 			},
 		}))
 	}
+	log.Debug("settings", "config", settings.ConfigPath, "source", settings.Source, "format", settings.Format)
 
 	b := opts.backend
 	var np *model.NowPlaying
 	if b == nil {
 		err = &backend.Error{Kind: backend.KindNotAvailable, Message: "no source available in this build"}
 	} else {
-		log.Debug("reading", "source", b.Source(), "format", *formatName)
+		log.Debug("reading", "source", b.Source(), "format", settings.Format)
 		var item model.NowPlaying
 		if item, err = b.Read(ctx); err == nil {
 			np = &item
@@ -105,7 +143,7 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 
 	// Only a clean read or "nothing playing" produces stdout; in JSON the
 	// latter is the literal null.
-	if !*quiet && (err == nil || backend.KindOf(err) == backend.KindNothingPlaying) {
+	if !settings.Quiet && (err == nil || backend.KindOf(err) == backend.KindNothingPlaying) {
 		if code := writeOutput(stdout, render, np); code != exitOK {
 			printError(stderr, errors.New("cannot write output"))
 			return code
@@ -118,7 +156,7 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	if errors.As(err, &be) && be.Err != nil {
 		log.Debug("cause", "error", be.Err)
 	}
-	if !*quiet {
+	if !settings.Quiet {
 		printError(stderr, err)
 	}
 	return backend.ExitCode(backend.KindOf(err))
@@ -137,10 +175,11 @@ func writeOutput(stdout io.Writer, render renderFunc, np *model.NowPlaying) int 
 	return exitOK
 }
 
-// newRenderer validates the format flags and, for templates, parses the
-// template, so every usage error surfaces before any backend read.
-func newRenderer(name, tmplText string) (renderFunc, error) {
-	switch name {
+// newRenderer builds the output renderer for the resolved settings and, for
+// templates, parses the template, so every usage error surfaces before any
+// backend read.
+func newRenderer(s config.Settings) (renderFunc, error) {
+	switch s.Format {
 	case formatText:
 		return func(np *model.NowPlaying) ([]byte, error) {
 			if np == nil {
@@ -151,12 +190,9 @@ func newRenderer(name, tmplText string) (renderFunc, error) {
 	case formatJSON:
 		return format.JSON, nil
 	case formatTemplate:
-		if tmplText == "" {
-			return nil, errors.New("--format template requires a non-empty --template")
-		}
-		tpl, err := format.ParseTemplate(tmplText)
+		tpl, err := format.ParseTemplate(s.Template)
 		if err != nil {
-			return nil, fmt.Errorf("invalid template: %w", err)
+			return nil, fmt.Errorf("invalid template from %s: %w", s.TemplateOrigin, err)
 		}
 		return func(np *model.NowPlaying) ([]byte, error) {
 			if np == nil {
@@ -165,6 +201,6 @@ func newRenderer(name, tmplText string) (renderFunc, error) {
 			return []byte(tpl.Render(np) + "\n"), nil
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid --format %q (want text, json or template)", name)
+		return nil, fmt.Errorf("unsupported format %q", s.Format)
 	}
 }

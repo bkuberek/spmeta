@@ -1,0 +1,6 @@
+player = "spotifyd"
+zeta = 1
+alpha = "x"
+
+[theme]
+color = "red"

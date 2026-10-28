@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T3 done; T4 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T4 done; T5 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -104,7 +104,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T4 Configuration and precedence
 
-- [ ] T4 complete
+- [x] T4 complete
+- Evidence (2026-10-27): RED build failure (`config.Load`, `config.Env`, `cli.WithEnv` undefined); GREEN `go test -race -count=1 ./...` passes; `go vet` clean; `golangci-lint run` 0 issues. Binary: `SPMETA_FORMAT=xml` → exit 2 naming the variable. Tests inject `config.Env` and never read the real environment or home directory. Parent correction (test-first, RED observed): a missing file named explicitly by `--config` or `SPMETA_CONFIG` is now a usage error (exit 2, names the path and its origin); only the default location may be missing. The worker had made it silent, which would hide mistyped paths. `TestLoadPaths` now supplies the files it resolves. Parent documented that rule and eager validation of every layer in cli.md. Gaps for T9: `--watch` and `--interval` are parsed and validated but not implemented, and `Settings.Interval` merges the flag with the config `interval`. Actual: about 1,050 authored lines (mostly tests) against a 350 forecast.
 - Goal: flags > `SPMETA_*` environment > `config.toml` > defaults, with XDG paths on both OSes.
 - Files: `internal/config/{paths.go,config.go,config_test.go,testdata/*.toml}`, `internal/cli/read.go` (use `Settings`); add `github.com/BurntSushi/toml`.
 - Test-first: RED precedence table (each key from each layer), `--template` implying `template` format only from the command line, invalid values exit 2 naming the source, unknown keys warn, missing file is fine, relative `XDG_CONFIG_HOME` ignored, `--config` and `SPMETA_CONFIG` paths, token path independent of `--config`.
@@ -299,4 +300,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T4 Configuration and precedence (delegated writer).
+T5 macOS backend (delegated writer).

@@ -1,0 +1,7 @@
+client_id      = "0123456789abcdef0123456789abcdef"
+default_source = "local"
+default_format = "template"
+template       = "{artist} - {title}"
+player         = "spotifyd"
+interval       = 2.5
+web_interval   = 4

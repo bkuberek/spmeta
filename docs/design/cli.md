@@ -45,7 +45,8 @@ Usage errors exit 2 and print the problem plus `Run 'spmeta --help' for usage.` 
 - `--format template` with no template from any layer.
 - A template that does not parse or names an unknown field.
 - `--interval` below the minimum, `--interval` without `--watch`, or `--quiet` with `--watch`.
-- An invalid value in an environment variable or the configuration file, or a configuration file that is not valid TOML. The message names the variable or file and key.
+- An invalid value in an environment variable or the configuration file, or a configuration file that is not valid TOML. The message names the variable or file and key. Every layer is validated, so an invalid value fails even when a higher-precedence layer overrides it.
+- A configuration file named by `--config` or `SPMETA_CONFIG` that does not exist or cannot be read.
 
 ## Output formats
 
@@ -253,7 +254,7 @@ web_interval   = 3.0               # seconds, watch mode, Web (minimum 1)
 | `interval` | float, seconds | 1.0 | `--interval` |
 | `web_interval` | float, seconds | 3.0 | none |
 
-Unknown keys print one warning per key on stderr (suppressed by `--quiet`) and are otherwise ignored, so a newer configuration file does not break an older binary. A missing file is not an error.
+Unknown keys print one warning per key on stderr (suppressed by `--quiet`) and are otherwise ignored, so a newer configuration file does not break an older binary. A missing file at the default location is not an error; a missing file named explicitly by `--config` or `SPMETA_CONFIG` is a usage error, so a mistyped path is never silently ignored.
 
 ### Token file
 

@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/bkuberek/spmeta/internal/cli"
+	"github.com/bkuberek/spmeta/internal/config"
 )
 
 func run(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"})
+	code = cli.Run(context.Background(), args, &out, &errOut, cli.BuildInfo{Version: "dev"}, cli.WithEnv(config.Env{}))
 	return code, out.String(), errOut.String()
 }
 
