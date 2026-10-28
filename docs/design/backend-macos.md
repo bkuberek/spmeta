@@ -18,8 +18,9 @@ func New(r Runner, now func() time.Time) *Backend
 func (b *Backend) Source() model.Source // "macos"
 func (b *Backend) Read(ctx context.Context) (model.NowPlaying, error)
 
-// CheckPermission is used by doctor. It never launches Spotify.
-func (b *Backend) CheckPermission(ctx context.Context) PermissionResult
+// CheckPermission is used by doctor. It never launches Spotify. beforePrompt,
+// when not nil, runs just before the Apple event is sent.
+func (b *Backend) CheckPermission(ctx context.Context, beforePrompt func()) PermissionResult
 ```
 
 `ExecRunner` is the production `Runner`:
@@ -164,7 +165,7 @@ The exact stderr text for -1743 was not captured live; a typical form is `execut
 
 ## Permission check for doctor
 
-`CheckPermission` runs only when `ProcessRunning` reports Spotify running. It prints the prompt notice (see [cli.md](./cli.md)), then runs this script with a 120 s timeout:
+`CheckPermission` runs only when `ProcessRunning` reports Spotify running. It calls `beforePrompt`, which `doctor` uses to print the prompt notice on stderr (see [cli.md](./cli.md)), then runs this script with a 120 s timeout:
 
 ```applescript
 tell application id "com.spotify.client" to return (player state as string)

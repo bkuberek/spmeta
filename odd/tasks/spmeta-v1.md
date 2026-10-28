@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; release-cut decision next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -212,7 +212,19 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T10 Doctor and README
 
-- [ ] T10 complete
+- [ ] T10 complete (code done 2026-10-28; manual-matrix rows that need user action are pending)
+- Evidence (2026-10-28):
+  - RED: `macos` build failed (`undefined: PermissionState`, `CheckPermission undefined`); `internal/doctor` had no non-test files; `cli` build failed on `macos.PermissionResult`. GREEN: `go test -race -count=1 ./...` passes; `go vet` (darwin, linux, linux+integration) is clean; `golangci-lint run` reports 0 issues; the linux and windows builds compile. The parent re-ran tests and lint.
+  - Design: `macos.CheckPermission(ctx, beforePrompt func())` runs only when Spotify is running and uses a 120 s timeout. `internal/doctor` works against two small interfaces. `internal/cli/doctor.go` type-asserts the local backend, so no new options are needed. `mpris.Players` already existed from T6/T7, so only a characterization test was added.
+  - Contract: cli.md now gives every doctor line a status word (the old `config` example contradicted its own rule). A config load failure is reported as `config  error:` and does not change the exit code. The notice goes to stderr. Exit 4 prints `spmeta: no source is available` and a hint. backend-macos.md now documents the `beforePrompt` signature (parent edit).
+  - Live doctor on this Mac (also re-run by the parent): `config ok`, `macos ok: Spotify is running; Automation permission granted`, `web unavailable`, exit 0.
+  - Manual matrix, macOS rows run:
+    - Track playing: text, JSON and template output all exit 0.
+    - Hung app (`kill -STOP` on Spotify): exit 1 after 2.01 s with the doctor hint, and exit 0 after resume. The writer froze the user's Spotify for about 2 s without asking first.
+    - `--watch`: exit 0 on SIGINT.
+  - Pending rows (need user action or a privacy change): paused; nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; first-run consent wait; SketchyBar or launchd as the responsible process; and the Linux desktop players.
+  - Follow-ups: `debugLogger` in `internal/cli/doctor.go` duplicates the slog setup in `read.go`. The "120 s" text in the doctor output mirrors `macos.permissionTimeout`. T14 replaces the static `web` line in `internal/doctor/doctor.go`.
+  - Actual: about 1,520 lines (about 450 non-test Go, 190 README, 24 cli.md) against a 400 forecast.
 - Goal: `spmeta doctor` for local sources and the user-facing README.
 - Files: `internal/doctor/{doctor.go,doctor_test.go}`, `internal/cli/doctor.go`, `internal/backend/macos/macos.go` (`CheckPermission`), `internal/backend/mpris/mpris.go` (`Players`), `README.md` (install, usage, exit codes, status-bar examples, macOS Automation and troubleshooting, link to docs).
 - Test-first: RED doctor tests with fake backends (each status word, exit 0 versus 4, macOS not running never runs a script); README is documentation (exception: structural review only).
@@ -342,4 +354,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T10 Doctor and README (delegated writer).
+Run the pending local manual-matrix rows with the user, then the user decides on the release cut: local-only v0.1.0 (T15 now) or T11–T14 first.

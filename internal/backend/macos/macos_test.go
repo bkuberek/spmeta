@@ -504,3 +504,95 @@ func assertError(t *testing.T, err error, kind backend.Kind, msg, hint string) {
 		t.Errorf("Hint = %q, want %q", be.Hint, hint)
 	}
 }
+
+func TestCheckPermission(t *testing.T) {
+	t.Parallel()
+	exitErr := errors.New("exit status 1")
+	tests := []struct {
+		name       string
+		runner     *fakeRunner
+		want       PermissionState
+		wantPrompt bool
+		wantScript int
+	}{
+		{"granted", &fakeRunner{running: true, stdout: []byte("playing\n")}, PermissionGranted, true, 1},
+		{"denied", &fakeRunner{running: true, stderr: fixture(t, "stderr-1743.txt"), scriptErr: exitErr}, PermissionDenied, true, 1},
+		{"quit during the check", &fakeRunner{running: true, stderr: fixture(t, "stderr-600.txt"), scriptErr: exitErr}, PermissionSpotifyNotRunning, true, 1},
+		{"apple event timed out", &fakeRunner{running: true, stderr: fixture(t, "stderr-1712.txt"), scriptErr: exitErr}, PermissionNoAnswer, true, 1},
+		{"unknown error number", &fakeRunner{running: true, stderr: []byte("execution error: odd. (-9999)\n"), scriptErr: exitErr}, PermissionFailed, true, 1},
+		{"not running", &fakeRunner{running: false}, PermissionSpotifyNotRunning, false, 0},
+		{"process check fails", &fakeRunner{runningErr: errors.New("pgrep: boom")}, PermissionFailed, false, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			prompts := 0
+			got := newBackend(tc.runner).CheckPermission(context.Background(), func() { prompts++ })
+			if got.State != tc.want {
+				t.Errorf("State = %v, want %v (message %q)", got.State, tc.want, got.Message)
+			}
+			if (prompts == 1) != tc.wantPrompt || prompts > 1 {
+				t.Errorf("notice shown %d times, want shown=%v", prompts, tc.wantPrompt)
+			}
+			if tc.runner.scriptCalls != tc.wantScript {
+				t.Errorf("RunScript called %d times, want %d", tc.runner.scriptCalls, tc.wantScript)
+			}
+			if tc.want == PermissionFailed && got.Message == "" {
+				t.Error("a failure carries no message")
+			}
+		})
+	}
+}
+
+func TestCheckPermissionSendsMinimalScript(t *testing.T) {
+	t.Parallel()
+	r := &fakeRunner{running: true, stdout: []byte("paused\n")}
+	newBackend(r).CheckPermission(context.Background(), nil)
+	const want = `tell application id "com.spotify.client" to return (player state as string)`
+	if strings.TrimSpace(r.lastScript) != want {
+		t.Errorf("script = %q, want %q", r.lastScript, want)
+	}
+}
+
+func TestCheckPermissionNoticeComesBeforeTheScript(t *testing.T) {
+	t.Parallel()
+	r := &fakeRunner{running: true, stdout: []byte("playing\n")}
+	scriptsAtNotice := -1
+	newBackend(r).CheckPermission(context.Background(), func() { scriptsAtNotice = r.scriptCalls })
+	if scriptsAtNotice != 0 {
+		t.Errorf("notice ran after %d scripts, want before the first", scriptsAtNotice)
+	}
+}
+
+func TestCheckPermissionWaitsForTheConsentPrompt(t *testing.T) {
+	t.Parallel()
+	r := &fakeRunner{running: true, block: true}
+	b := newBackend(r)
+	b.permissionTimeout = 20 * time.Millisecond
+	start := time.Now()
+	got := b.CheckPermission(context.Background(), nil)
+	if got.State != PermissionNoAnswer {
+		t.Errorf("State = %v, want PermissionNoAnswer", got.State)
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Error("CheckPermission did not honor its own timeout")
+	}
+}
+
+func TestCheckPermissionHonorsCallerCancellation(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := &fakeRunner{running: true, block: true}
+	got := newBackend(r).CheckPermission(ctx, nil)
+	if got.State != PermissionFailed || !errors.Is(got.Err, context.Canceled) {
+		t.Errorf("result = %+v, want a failure wrapping context.Canceled", got)
+	}
+}
+
+func TestPermissionTimeoutIsTwoMinutes(t *testing.T) {
+	t.Parallel()
+	if got := newBackend(&fakeRunner{}).permissionTimeout; got != 120*time.Second {
+		t.Errorf("permissionTimeout = %v, want 120s", got)
+	}
+}

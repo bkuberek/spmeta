@@ -181,23 +181,33 @@ It exits 0 when a token file exists and parses, and 4 otherwise. When the refres
 
 `spmeta doctor` reports which sources are available and why the others are not (FR-11). It may wait up to 120 s for the macOS Automation prompt, and it makes one Web request when a token file exists.
 
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--debug` | off | Write diagnostics, including the cause of each failed check, to stderr |
+| `--config` | see Configuration file | Read this configuration file instead of the default |
+
+`doctor` accepts no other flags and no positional arguments (exit 2). It has no `--quiet`.
+
 ```text
 spmeta 0.1.0 (darwin/arm64)
-config  /Users/user/.config/spmeta/config.toml: not found, using defaults
+config  ok: /Users/user/.config/spmeta/config.toml not found, using defaults
 macos   ok: Spotify is running; Automation permission granted
 web     not configured: run 'spmeta auth login' to see playback on other devices (optional)
 ```
 
-Each line starts with the check name and one of `ok`, `unavailable`, `not configured`, `denied`, or `error`, followed by the reason and, where useful, the next step. Checks per platform:
+Each line starts with the check name, padded to 8 columns, and one of `ok`, `unavailable`, `not configured`, `denied`, or `error`, followed by a colon, the reason and, where useful, the next step. The `config` line follows the same rule. A check may add detail lines indented by 8 spaces under its line: `config` lists each unknown key, and `mpris` lists each player. Checks per platform:
 
 | Check | What it does |
 | --- | --- |
-| `config` | Resolves the path; parses the file; lists unknown keys |
-| `macos` (macOS) | Runs the process check. If Spotify is running, sends a minimal Apple event with a 120 s timeout and prints "macOS may ask to allow <terminal> to control Spotify; click OK." before sending. Reports granted, denied (with the System Settings path), or no answer. If Spotify is not running, reports that permission cannot be checked without launching it, and does not launch it |
-| `mpris` (Linux) | Resolves the session bus address, lists MPRIS players, marks the one `spmeta` would select, and reports `GetAll` failures |
-| `web` | Reports the Client ID source, token file presence and mode, access-token expiry, and estimated refresh-token expiry; if a token file exists, performs one `GET /v1/me/player` and reports the outcome |
+| `config` | Resolves the path; parses the file; lists unknown keys. A configuration that cannot be loaded (invalid TOML or value, or a missing file named by `--config`) is reported as `error` with the message `config.Load` produces; it does not stop the other checks and does not change the exit code |
+| `macos` (macOS) | Runs the process check. If Spotify is running, sends a minimal Apple event with a 120 s timeout and prints "macOS may ask to allow <terminal> to control Spotify; click OK." to stderr before sending. `<terminal>` comes from `TERM_PROGRAM` (`Apple_Terminal` as Terminal, a trailing `.app` dropped), or reads "the app that runs spmeta" when it is unset. Reports `ok` when granted, `denied` (with the System Settings path), or `error` when no answer arrives or the check fails. If Spotify is not running, reports `unavailable` because permission cannot be checked without launching it, and does not launch it |
+| `mpris` (Linux) | Resolves the session bus address, lists MPRIS players one per detail line, marks the one `spmeta` would select (the `player` setting, else the usual preference order), and shows `no answer` for a player whose `GetAll` failed. `ok` needs a selected player; no bus, no players, or no Spotify client is `unavailable` |
+| `local` (other platforms) | Reports `unavailable`: this platform is not supported |
+| `web` | Reports the Client ID source, token file presence and mode, access-token expiry, and estimated refresh-token expiry; if a token file exists, performs one `GET /v1/me/player` and reports the outcome. In a build without Web it reports `unavailable: Web mode is not available in this version` and makes no request |
 
-`doctor` exits 0 when at least one source is usable (it returned an item or "nothing playing"), and 4 otherwise.
+The report goes to stdout, one line per check as soon as the check finishes, so a long wait on the Automation prompt shows what was checked before it. `doctor` never reads the current track and never launches Spotify.
+
+`doctor` exits 0 when at least one source is usable and 4 otherwise. A source is usable when it is reachable: macOS permission granted, or an MPRIS player selected. Web alone counts once it exists (T14). On exit 4 it prints `spmeta: no source is available` and a `hint:` line on stderr after the report.
 
 ### version
 

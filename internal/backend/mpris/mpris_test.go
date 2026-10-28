@@ -370,3 +370,44 @@ func TestPlayersBusUnreachable(t *testing.T) {
 		t.Errorf("err = %v, want not available", err)
 	}
 }
+
+func TestPlayersSelectionFollowsPreferenceOrderAndDotBoundary(t *testing.T) {
+	tests := []struct {
+		name     string
+		players  map[string]fakePlayer
+		wantName string
+	}{
+		{
+			"spotify desktop beats spotifyd even when paused",
+			map[string]fakePlayer{"spotifyd.instance1": ok(playerProps("Playing")), "spotify": ok(playerProps("Paused"))},
+			"spotify",
+		},
+		{
+			"spotifyd is not matched by the spotify entry",
+			map[string]fakePlayer{"spotifyd": ok(playerProps("Paused")), "ncspot": ok(playerProps("Playing"))},
+			"spotifyd",
+		},
+		{
+			"a longer name sharing a prefix is not a match",
+			map[string]fakePlayer{"spotifydx": ok(playerProps("Playing"))},
+			"",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := newBackend(newFakeBus(tc.players), "").Players(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			selected := ""
+			for _, p := range got {
+				if p.Selected {
+					selected = p.Name
+				}
+			}
+			if selected != tc.wantName {
+				t.Errorf("selected = %q, want %q (players %+v)", selected, tc.wantName, got)
+			}
+		})
+	}
+}
