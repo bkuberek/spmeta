@@ -222,7 +222,9 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
     - Track playing: text, JSON and template output all exit 0.
     - Hung app (`kill -STOP` on Spotify): exit 1 after 2.01 s with the doctor hint, and exit 0 after resume. The writer froze the user's Spotify for about 2 s without asking first.
     - `--watch`: exit 0 on SIGINT.
-  - Pending rows (need user action or a privacy change): paused; nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; first-run consent wait; SketchyBar or launchd as the responsible process; and the Linux desktop players.
+  - First-run consent: the user saw and approved the macOS Automation prompt during the first live probe (2026-10-27). Doctor's own wait on the prompt was not exercised, because permission was already granted.
+  - Deferred by the user (2026-10-28): SketchyBar or launchd as the responsible process (they have no status-bar plugin yet).
+  - Pending rows: paused; nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; Linux desktop players.
   - Follow-ups: `debugLogger` in `internal/cli/doctor.go` duplicates the slog setup in `read.go`. The "120 s" text in the doctor output mirrors `macos.permissionTimeout`. T14 replaces the static `web` line in `internal/doctor/doctor.go`.
   - Actual: about 1,520 lines (about 450 non-test Go, 190 README, 24 cli.md) against a 400 forecast.
 - Goal: `spmeta doctor` for local sources and the user-facing README.
