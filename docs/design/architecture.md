@@ -16,7 +16,8 @@ cmd/spmeta/
 internal/cli/
   cli.go                  # Run: dispatch to read, auth, doctor, version, help
   read.go                 # root command: flags, resolver, formatter, watch
-  auth.go                 # auth login|logout|status (added in T12)
+  auth.go                 # auth login|logout|status
+  web.go                  # Web backend over the token file, throttle, doctor report
   doctor.go               # doctor command
   usage.go                # usage text, UsageError (exit 2)
   exit.go                 # error printing and exit-code mapping
@@ -97,7 +98,7 @@ Backends receive their collaborators through constructors so tests can inject fa
 | --- | --- | --- |
 | macOS | `macos.New(r Runner, now func() time.Time)` | `Runner` runs `pgrep` and `osascript` |
 | MPRIS | `mpris.New(dial func(ctx) (Bus, error), player string, now func() time.Time)` | `Bus` lists names and reads properties |
-| Web | `web.New(c *web.Client, now func() time.Time)` | `*http.Client`, API and accounts base URLs, token source |
+| Web | `&web.Backend{Tokens, Endpoints, HTTPClient, Now, Sleep, Log, MaxRetryWait, Version}` | `*http.Client`, API base URL, token source |
 
 ## Typed errors and exit codes
 
@@ -167,7 +168,7 @@ type Mode string // "auto", "local", "web"
 type Resolver struct {
 	Mode  Mode
 	Local backend.Backend // never nil; local_other.go returns an always-NotAvailable backend
-	Web   backend.Backend // nil when Web is not configured (no token file) or not built
+	Web   backend.Backend // nil when there is no token file
 
 	Logger *slog.Logger // debug line per source read; nil discards
 }
@@ -188,7 +189,7 @@ if Web != nil && errW == nil                -> return W   # paused on another de
 return Worse(errL, errW)
 ```
 
-For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is nil, return `NotAvailable` with the message "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`." (or, in builds without Web, "Web mode is not available in this version").
+For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is nil, return `NotAvailable` with the message "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`." (the wording of `auth status`). `Static()` reports the same error for a whole run, so watch mode exits 4 at once.
 
 Error precedence for `Worse`, highest first: `KindPermissionDenied`, `KindAuthRequired`, `KindRateLimited`, `KindUnexpected`, `KindNothingPlaying`, `KindNotAvailable`. A nil error has the lowest precedence. When both errors have the same kind, the local error wins.
 
@@ -291,7 +292,7 @@ type Settings struct {
 
 - `--debug` enables a `log/slog` text handler on stderr at debug level; otherwise logging is discarded.
 - Debug output includes backend selection, the MPRIS player chosen, `osascript` exit status and stderr, HTTP method, path, status, and duration.
-- Debug output never includes access tokens, refresh tokens, authorization codes, PKCE verifiers, `Authorization` headers, or token-endpoint bodies. Only the token package handles those values, and it never passes them to the logger. A test runs a full fake login and refresh with `--debug` and asserts that no secret value appears in stderr.
+- Debug output never includes access tokens, refresh tokens, authorization codes, PKCE verifiers, `Authorization` headers, or token-endpoint bodies. Only the token package handles those values, and it never passes them to the logger. `internal/cli/secrecy_test.go` runs a fake login, reads, refreshes (also after a 401 and a refused refresh whose bodies echo tokens) and `doctor` with `--debug`, and asserts that no secret value appears in stdout or stderr.
 
 ## Dependency boundaries
 

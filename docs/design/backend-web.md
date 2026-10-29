@@ -86,7 +86,7 @@ Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta
 - Writes are atomic: write a temporary file in the same directory with mode 0600, `fsync`, then `rename` over `token.json`.
 - A readable file is accepted only when `version` is 1 and `client_id`, `access_token`, and `refresh_token` are present; anything else counts as unparsable (`KindAuthRequired`). Times are stored in UTC to the second.
 - `token.json.lock` (mode 0600), the lock file used by refresh, is created on first use and never deleted, because removing a lock file lets two processes lock different files. `auth logout` removes only `token.json`.
-- `client_id` is the ID used at login; refresh always uses it, even if the configuration now names another one (logged under `--debug`).
+- `client_id` is the ID used at login; refresh always uses it, even if the configuration now names another one. The CLI logs that under `--debug`, naming both IDs (Client IDs are not secrets) and never a token.
 - `authorized_at` is not changed by refresh, because refresh does not extend the refresh token's 6-month lifetime.
 - A missing file means "not logged in" (`KindNotAvailable`, exit 4, hint "Run `spmeta auth login`."). A file that exists but cannot be read or parsed is `KindAuthRequired` (exit 5).
 - A file whose mode allows group or other access is still used; `auth status` and `doctor` warn about it.
@@ -198,14 +198,22 @@ Details the table leaves open:
 | Login callback | 180 s | None |
 | Token lock | 10 s | Polls every 100 ms |
 
+## CLI wiring
+
+- The CLI builds the Web backend only when the token file exists. Without one, `auto` skips Web and makes no request, and `--source web` exits 4 with "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`.". A file that exists but cannot be read or parsed still gets a backend, so the read reports exit 5.
+- `Tokens` is an `*auth.TokenSource` over the same path and endpoints. `Version` is the build version, for the User-Agent. The `--debug` logger is shared with both.
+- `MaxRetryWait` is `web.OneShotRetryWait` for a one-shot read and zero in watch mode.
+- In `auto` watch mode the backend is wrapped in `resolve.Throttle` with `web_interval`; with `--source web` the poll interval itself is `--interval` or `web_interval`.
+- `doctor` builds the same backend with `MaxRetryWait` zero and makes one request.
+
 ## Secrets
 
 - Access tokens, refresh tokens, authorization codes, verifiers, and `Authorization` headers never reach the logger, error messages, or stdout.
 - Debug logging for HTTP records method, host, path, status, and duration only. The token endpoint's request and response bodies are never logged.
-- A test performs a fake login, refresh, and read with `--debug` and asserts that none of the secret values appear in stderr.
+- A test performs a fake login, reads, refreshes, a 401 and a refused refresh whose responses echo tokens, and `doctor`, all with `--debug`, and asserts that none of the secret values appear in stdout or stderr (`internal/cli/secrecy_test.go`).
 
 ## Testing hooks
 
 - `httptest.Server` stands in for both endpoints through `Endpoints`.
-- The browser opener is the `Open func(url string) error` field of `LoginOptions`, replaced in tests by a function that calls the callback URL directly. The `cli` package exposes it as `WithBrowserOpener`, and the service URLs as `WithAuthEndpoints`.
+- The browser opener is the `Open func(url string) error` field of `LoginOptions`, replaced in tests by a function that calls the callback URL directly. The `cli` package exposes it as `WithBrowserOpener`, and the service URLs, for `auth` and for Web reads, as `WithAuthEndpoints`.
 - `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/backend/web` they are the exported `Now` and `Sleep` fields of `Backend`, and `Tokens` takes a fake. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock. `LoginOptions.Sleep` replaces the 180 s wait for the callback, so a timeout test returns at once.

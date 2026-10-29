@@ -15,13 +15,14 @@ import (
 
 const defaultLocalInterval = time.Second
 
-// WithSleep replaces the wait between watch reads. Tests use it to avoid
-// real delays.
+// WithSleep replaces the waits between watch reads, before a Web retry and
+// during login. Tests use it to avoid real delays.
 func WithSleep(f func(ctx context.Context, d time.Duration) error) Option {
 	return func(o *options) { o.sleep = f }
 }
 
-// WithClock replaces the clock that throttles Web reads in watch mode.
+// WithClock replaces the clock of the Web backend: token expiry, the watch
+// throttle, and the login flow.
 func WithClock(now func() time.Time) Option {
 	return func(o *options) { o.now = now }
 }
@@ -41,15 +42,6 @@ func pollInterval(s config.Settings, flagGiven bool) time.Duration {
 		return s.Interval
 	}
 	return defaultLocalInterval
-}
-
-// webBackend returns the Web backend the resolver reads. In auto watch mode
-// it is throttled to web_interval, because the local interval is shorter.
-func webBackend(s config.Settings, o options) backend.Backend {
-	if o.web == nil || !s.Watch || s.Source != string(resolve.ModeAuto) {
-		return o.web
-	}
-	return resolve.Throttle(o.web, s.WebInterval, o.now)
 }
 
 // runWatch prints a line for each change until ctx ends (exit 0) or a fatal

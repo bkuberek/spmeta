@@ -76,7 +76,7 @@ func TestDoctorMacOSReport(t *testing.T) {
 	want := []string{
 		"config  ok: /home/u/.config/spmeta/config.toml not found, using defaults",
 		"macos   ok: Spotify is running; Automation permission granted",
-		"web     unavailable: Web mode is not available in this version",
+		"web     not configured: run 'spmeta auth login' to see playback on other devices (optional)",
 	}
 	if !strings.HasPrefix(lines[0], "spmeta 0.1.0 (") {
 		t.Errorf("header = %q", lines[0])
@@ -298,7 +298,7 @@ func TestDoctorHelp(t *testing.T) {
 			if code != 0 || errOut.Len() != 0 {
 				t.Fatalf("exit = %d, stderr %q, want 0 and empty", code, errOut.String())
 			}
-			for _, want := range []string{"spmeta doctor [--debug] [--config PATH]", "--debug", "--config PATH", "120 s"} {
+			for _, want := range []string{"spmeta doctor [--debug] [--config PATH]", "--debug", "--config PATH", "120 s", "one request to the Spotify Web API"} {
 				if !strings.Contains(out.String(), want) {
 					t.Errorf("usage lacks %q:\n%s", want, out.String())
 				}

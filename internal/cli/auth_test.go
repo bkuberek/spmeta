@@ -46,9 +46,11 @@ type authSetup struct {
 	mu        sync.Mutex
 	form      url.Values // the last token request
 	visit     func(t *testing.T, authURL string)
-	opened    []string
-	sleep     func(context.Context, time.Duration) error
-	waited    []time.Duration
+	// tokenReply replaces the default 200 of the token endpoint.
+	tokenReply func(w http.ResponseWriter, r *http.Request)
+	opened     []string
+	sleep      func(context.Context, time.Duration) error
+	waited     []time.Duration
 	// realDefaultPort leaves the login port at its production default;
 	// otherwise run swaps in a free port so parallel tests do not collide.
 	realDefaultPort bool
@@ -63,6 +65,10 @@ func newAuthSetup(t *testing.T) *authSetup {
 		s.form = r.PostForm
 		s.mu.Unlock()
 		s.tokenReqs.Add(1)
+		if s.tokenReply != nil {
+			s.tokenReply(w, r)
+			return
+		}
 		_, _ = io.WriteString(w, `{"access_token":"`+authAccess+`","token_type":"Bearer","expires_in":3600,"refresh_token":"`+authRefresh+`","scope":"user-read-playback-state"}`)
 	}))
 	t.Cleanup(s.accounts.Close)

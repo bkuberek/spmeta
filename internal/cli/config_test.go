@@ -151,10 +151,10 @@ func TestMissingExplicitConfigFileIsUsageError(t *testing.T) {
 	}
 }
 
-func TestRootWebWithoutBackendStillExits4WithSettings(t *testing.T) {
+func TestRootWebWithoutLoginStillExits4WithSettings(t *testing.T) {
 	fake := &fakeBackend{np: playing()}
 	code, _, stderr := runConfigured(t, fake, nil, nil, "--source", "web", "--player", "mpd")
-	if code != 4 || !strings.Contains(stderr, "Web mode is not available in this version") {
+	if code != 4 || stderr != notLoggedIn {
 		t.Errorf("exit=%d stderr=%q, want 4", code, stderr)
 	}
 	if fake.calls != 0 {

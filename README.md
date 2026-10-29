@@ -9,7 +9,7 @@ $ spmeta
 
 `spmeta` is an independent project and is not affiliated with, endorsed by, or sponsored by Spotify. "Spotify" is a trademark of Spotify AB.
 
-Status: early release. `spmeta` reads the Spotify client on this machine; [Web mode](#web-mode-upcoming) comes later.
+Status: early release. `spmeta` reads the Spotify client on this machine, and with a one-time setup it can also read what plays on your other devices ([Web mode](#web-mode)).
 
 ## Install
 
@@ -61,7 +61,7 @@ spmeta --watch                               # print a line on every change
 spmeta doctor                                # check what works, and why not
 ```
 
-`spmeta` reads the Spotify client running on this machine. It never launches Spotify.
+`spmeta` reads the Spotify client running on this machine. It never launches Spotify. With a [Web mode](#web-mode) login it also reads playback on your other devices, such as a phone.
 
 | Flag | Default | Description |
 | --- | --- | --- |
@@ -70,7 +70,7 @@ spmeta doctor                                # check what works, and why not
 | `--watch` | off | Keep running; print a line only when the track, state, or device changes |
 | `--interval SECONDS` | 1 | Poll interval for `--watch`; minimum 0.5; only with `--watch` |
 | `--player NAME` | none | Linux: use this MPRIS player (see [Linux](#linux)) |
-| `--source auto\|local\|web` | `auto` | Where to read; `web` is [upcoming](#web-mode-upcoming) |
+| `--source auto\|local\|web` | `auto` | Where to read; `web` needs a [login](#web-mode) |
 | `--quiet` | off | Print nothing; only set the exit code |
 | `--debug` | off | Write diagnostics to stderr; never tokens |
 | `--config PATH` | see below | Use this configuration file |
@@ -110,7 +110,7 @@ When nothing is playing, text and template output are empty, JSON prints `null`,
 | 6 | Permission denied: macOS Automation not granted, or Web 403 (not on the app's allowlist, or the app owner's Premium lapsed) |
 | 7 | Rate limited by the Web API and gave up |
 
-Codes 5 and 7, and the Web causes of the others, come with [Web mode](#web-mode-upcoming).
+Codes 5 and 7, and the Web causes of the others, come from [Web mode](#web-mode).
 
 Every non-zero exit prints `spmeta: <message>` on stderr, sometimes followed by a `hint:` line. `--quiet` suppresses both, except for usage errors.
 
@@ -173,7 +173,7 @@ The Waybar JSON return type and more examples are in [docs/design/cli.md](docs/d
 spmeta 0.1.0 (darwin/arm64)
 config  ok: /Users/user/.config/spmeta/config.toml not found, using defaults
 macos   ok: Spotify is running; Automation permission granted
-web     unavailable: Web mode is not available in this version
+web     not configured: run 'spmeta auth login' to see playback on other devices (optional)
 ```
 
 Troubleshooting:
@@ -207,14 +207,48 @@ config  ok: /home/user/.config/spmeta/config.toml not found, using defaults
 mpris   ok: reading spotify
         spotify (Playing, selected)
         spotifyd.instance1234 (Paused)
-web     unavailable: Web mode is not available in this version
+web     not configured: run 'spmeta auth login' to see playback on other devices (optional)
 ```
 
 The Spotify desktop client often reports its playback position as 0. `spmeta` then leaves `position_ms` null instead of showing a wrong time.
 
-## Web mode (upcoming)
+## Web mode
 
-A later release will add `--source web`, which reads playback on any of your devices, such as a phone, through the Spotify Web API. It needs a one-time `spmeta auth login` with your own Spotify app. Until then `spmeta` reads only this machine, and `--source web` exits 4 with "Web mode is not available in this version."
+Web mode asks Spotify's servers what plays on your account, so it sees any device: a phone, a speaker, another computer. It needs a one-time setup with your own Spotify app, because Spotify allows only a few users per app. Without a login, `spmeta` never contacts Spotify's servers.
+
+### One-time setup
+
+1. Sign in to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) with an account that has **Premium**, and create an app. Tick **Web API** when asked which APIs it uses.
+2. Add the redirect URI `http://127.0.0.1:8974/callback`. The dashboard rejects a loopback URI without a port ("This redirect URI is not secure."), so `spmeta` listens on port 8974 by default.
+3. Open the app's **User Management** and add the Spotify account you listen with, even if it is the account that owns the app.
+4. Copy the app's **Client ID** and log in:
+
+   ```bash
+   spmeta auth login --client-id 0123456789abcdef0123456789abcdef
+   ```
+
+   Or set `client_id` in `config.toml` (or `SPMETA_CLIENT_ID`) and run `spmeta auth login`. Your browser opens Spotify's consent page; `spmeta` waits up to 180 s for it. `--no-browser` only prints the URL, and `--port` changes the port (register the same one in step 2).
+
+`spmeta auth status` shows the login, `spmeta auth logout` deletes it, and `spmeta doctor` makes one Web request to check that it works. The login is stored in `~/.config/spmeta/token.json` (mode 0600).
+
+### Using it
+
+| Command | What it reads |
+| --- | --- |
+| `spmeta` (`--source auto`) | This machine first. If nothing plays here, Web is asked next. A playing track wins, local first; otherwise a paused one is shown, local first. Without a login Web is skipped and nothing is requested |
+| `spmeta --source web` | Only Web, even while this machine plays. Without a login it exits 4 with "not logged in to the Spotify Web API" |
+| `spmeta --source local` | Never Web |
+
+With `--watch`, Web is read at most every `web_interval` seconds (default 3, minimum 1, set in `config.toml`), and only while this machine is not playing. A short rate limit (`Retry-After` of 10 s or less) is waited out in a one-shot read; a longer one exits 7. Watch mode waits and keeps going.
+
+### Limits and upkeep
+
+- **Re-login every 6 months.** Spotify's refresh tokens expire six months after login, and refreshing does not extend that. `spmeta auth status` shows the estimated date and warns 14 days before. When it has passed, `spmeta` exits 5; run `spmeta auth login` again.
+- **Development Mode.** A new app is limited to 5 users, each added under User Management. A 403 (exit 6) means your account is not on that list, or the owner's Premium subscription lapsed.
+- **Rate limits.** Spotify limits requests per app (exit 7). Keep `web_interval` at its default unless you need less.
+- **Revoking access.** Spotify offers no token-revocation endpoint; to revoke access, remove the app at [spotify.com/account/apps](https://www.spotify.com/account/apps/). `spmeta auth logout` only deletes the local token file.
+
+The full flow, the token file, and the error table are in [docs/design/backend-web.md](docs/design/backend-web.md).
 
 ## More documentation
 
