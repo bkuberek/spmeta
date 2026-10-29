@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T14 for v0.2.0 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done on feat/web-mode; T12 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -240,7 +240,29 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T11 Web auth core
 
-- [ ] T11 complete
+- [x] T11 complete (branch `feat/web-mode`)
+- Evidence (2026-10-29):
+  - RED: build failure on the missing package (`undefined: tryLock`, `TokenSource`, `WriteToken`). With compiling stubs, 34 tests failed (for example the RFC 7636 vector and `second tryLock = <nil>, want errLockHeld`).
+  - GREEN: `go test -race -count=1 ./...` passes. The flake check `go test -race -count=10 -run 'Concurrent|Lock' ./internal/auth/` passes.
+  - Mutation checks: a shared flock, and skipping the re-read after locking, are both caught by the goroutine test and by a real-process test (4 child processes, 1 HTTP refresh).
+  - `go vet` is clean and `golangci-lint` reports 0 issues. The linux and windows builds compile, as do builds for the BSDs, solaris, illumos, aix, plan9 and js/wasm. The parent re-ran tests and lint and checked that only method, host and path are logged.
+  - API:
+    - `NewVerifier`, `NewState`, `Challenge`;
+    - `Token` (secrets redacted in `String`, `GoString` and slog), `ReadToken`, `WriteToken`;
+    - `Endpoints`;
+    - `TokenSource{Path, Endpoints, HTTPClient, Now, Sleep, Log}.Token(ctx, force)`.
+  - Spec clarifications in backend-web.md:
+    - `Endpoints` lives in `auth`;
+    - token file validity rules;
+    - `token.json.lock` is never deleted;
+    - a 400 other than `invalid_grant` shows only a sanitized code;
+    - platforms without flock fall back to an in-process mutex (`lock_unix.go` lists darwin, linux and the BSDs, because solaris, illumos and aix lack `syscall.Flock`);
+    - `Now` and `Sleep` hooks.
+  - Hand-off to T12–T14:
+    - Hints say "Run `spmeta auth login`." (capitalized as in the macOS and MPRIS hints). cli.md and architecture.md still show lowercase; align them in T12.
+    - The `--debug` log for a configured Client ID that differs from the stored one belongs in T13 or T14, because `TokenSource` does not know the configured ID.
+    - T13 needs its own one-method token interface for fakes.
+  - Actual: about 1,600 lines (555 non-test) against a 450 forecast.
 - Goal: PKCE primitives, the token file, and refresh with a file lock.
 - Files: `internal/auth/{pkce.go,token.go,refresh.go,lock_unix.go,*_test.go,testdata/*}`.
 - Test-first: RED RFC 7636 vector, verifier length and charset (1,000 samples), token file 0600 in a 0700 directory with atomic replace, refresh on near-expiry and on `force`, rotation kept only when returned, `invalid_grant` gives `KindAuthRequired`, two concurrent refreshers perform one HTTP refresh, missing file gives `KindNotAvailable`.

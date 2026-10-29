@@ -16,6 +16,8 @@ type Endpoints struct {
 }
 ```
 
+`Endpoints` is defined in `internal/auth`, and `internal/backend/web` reuses it for the `API` field. `Endpoints.WithDefaults()` fills each empty field with its production URL.
+
 Only `api.spotify.com` and `accounts.spotify.com` are contacted, and only in Web mode or by `auth` and `doctor`.
 
 ## One-time user setup
@@ -71,6 +73,8 @@ Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta
 ```
 
 - Writes are atomic: write a temporary file in the same directory with mode 0600, `fsync`, then `rename` over `token.json`.
+- A readable file is accepted only when `version` is 1 and `client_id`, `access_token`, and `refresh_token` are present; anything else counts as unparsable (`KindAuthRequired`). Times are stored in UTC to the second.
+- `token.json.lock` (mode 0600), the lock file used by refresh, is created on first use and never deleted, because removing a lock file lets two processes lock different files. `auth logout` removes only `token.json`.
 - `client_id` is the ID used at login; refresh always uses it, even if the configuration now names another one (logged under `--debug`).
 - `authorized_at` is not changed by refresh, because refresh does not extend the refresh token's 6-month lifetime.
 - A missing file means "not logged in" (`KindNotAvailable`, exit 4, hint "run `spmeta auth login`"). A file that exists but cannot be read or parsed is `KindAuthRequired` (exit 5).
@@ -86,6 +90,13 @@ Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta
 4. `POST https://accounts.spotify.com/api/token` with `grant_type=refresh_token`, `refresh_token`, and `client_id`.
 5. On 200, update `access_token`, `expires_at`, and `scope`; replace `refresh_token` only when the response includes one. Write atomically, release the lock, and return.
 6. On 400 with `error: invalid_grant`, return `KindAuthRequired`: "Spotify rejected the saved login (refresh tokens expire 6 months after login, or access was revoked)." Hint: "run `spmeta auth login`." Other 400 errors are also `KindAuthRequired`. Network errors and 5xx are `KindUnexpected`.
+
+Details the steps leave open:
+
+- `TokenSource` is a struct. `Path` is required; `Endpoints`, `HTTPClient`, `Now`, `Sleep` (the wait between lock attempts), and `Log` default to the production values when zero.
+- For a 400 other than `invalid_grant`, the message is "Spotify refused to refresh the saved login: <error>." and shows only the `error` code (lowercase letters, digits, and underscores). `error_description` is server text and is never echoed.
+- Any status other than 200 and 400 is `KindUnexpected`, and so is a 200 without an `access_token` or a positive `expires_in`. A response without `scope` keeps the saved scope.
+- On platforms without `flock` (anything but macOS, Linux, and the BSDs, such as Windows), step 2 uses an in-process mutex. Goroutines of one process still refresh once, but two processes can refresh at the same moment and the last write wins; if Spotify rotated the refresh token in between, the loser may later get `invalid_grant` and must log in again. Native locking elsewhere would need a new dependency ([ADR 0006](../decisions/0006-dependencies.md)).
 
 ## Read request
 
@@ -164,4 +175,4 @@ Spotify computes limits over a rolling 30-second window per developer account an
 
 - `httptest.Server` stands in for both endpoints through `Endpoints`.
 - The browser opener is a `func(url string) error` field, replaced in tests by a function that calls the callback URL directly.
-- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly.
+- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock.
