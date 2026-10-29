@@ -1,5 +1,7 @@
 # spmeta
 
+![spmeta banner: several sources converge into a bracketed play mark, which emits one line of now-playing text](docs/assets/spmeta-banner.png)
+
 `spmeta` prints the track Spotify is playing right now: one line of text, JSON, or your own template. It is built for status bars, scripts, and overlays, and runs on macOS and Linux as a single binary.
 
 ```console

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800" viewBox="0 0 1600 800" role="img" aria-labelledby="title desc">
+  <title id="title">spmeta — Now playing. Ready to pipe.</title>
+  <desc id="desc">A charcoal and amber identity for spmeta. Three fine input lines converge on a bracketed now-playing symbol, then feed one line of Spotify track metadata.</desc>
+  <rect width="1600" height="800" fill="#111716"/>
+
+  <g fill="none" stroke="#303A36" stroke-width="1">
+    <path d="M96 96h1408M96 704h1408"/>
+    <path d="M96 88v16m1408-16v16M96 696v16m1408-16v16"/>
+  </g>
+
+  <g font-family="'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace">
+    <text x="96" y="148" fill="#9DA9A1" font-size="14" letter-spacing="3">MUSIC, AS DATA.</text>
+    <text x="90" y="290" fill="#F1F2EB" font-size="112" font-weight="500" letter-spacing="-7">spmeta</text>
+    <text x="96" y="354" fill="#F1F2EB" font-size="28" letter-spacing="-1">Now playing. Ready to pipe.</text>
+  </g>
+
+  <g fill="none" stroke-width="2">
+    <path d="M872 172h96c64 0 64 92 128 92h36" stroke="#55615A"/>
+    <path d="M872 356h96c64 0 64-92 128-92h36" stroke="#55615A"/>
+    <path d="M872 264h260" stroke="#F4C76B"/>
+    <path d="M1324 264h92c22 0 40 18 40 40v214" stroke="#F4C76B"/>
+  </g>
+  <g fill="#111716" stroke-width="2">
+    <circle cx="872" cy="172" r="5" stroke="#55615A"/>
+    <circle cx="872" cy="264" r="5" stroke="#F4C76B"/>
+    <circle cx="872" cy="356" r="5" stroke="#55615A"/>
+  </g>
+  <g transform="translate(1132 168) scale(1.5)" fill="#F4C76B">
+    <path d="M16 28h22v10H26v52h12v10H16z"/>
+    <path d="M112 28H90v10h12v52H90v10h22z"/>
+    <path d="M48 40v48l38-24z"/>
+  </g>
+
+  <g font-family="'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" letter-spacing="2" fill="#9DA9A1">
+    <text x="872" y="418">MANY SOURCES</text>
+    <text x="1428" y="494" text-anchor="end">ONE LINE</text>
+  </g>
+
+  <rect x="96" y="518" width="1408" height="130" fill="#18201D" stroke="#3C4840"/>
+  <rect x="96" y="518" width="3" height="130" fill="#F4C76B"/>
+  <g font-family="'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace">
+    <text x="130" y="560" fill="#9DA9A1" font-size="17">$ spmeta</text>
+    <text x="130" y="609" fill="#F1F2EB" font-size="29">▶ Amazone — Alvan · Home (2:00 / 3:58)</text>
+    <text x="96" y="748" fill="#9DA9A1" font-size="13" letter-spacing="1">STATUS BARS / SCRIPTS / OVERLAYS</text>
+    <text x="1504" y="748" fill="#F4C76B" font-size="13" letter-spacing="1" text-anchor="end">READ ONLY. READY TO USE.</text>
+  </g>
+</svg>

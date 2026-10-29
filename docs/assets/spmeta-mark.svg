@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">spmeta mark</title>
+  <desc id="desc">A now-playing triangle enclosed by square brackets, representing music as structured data.</desc>
+  <g fill="currentColor">
+    <path d="M16 28h22v10H26v52h12v10H16z"/>
+    <path d="M112 28H90v10h12v52H90v10h22z"/>
+    <path d="M48 40v48l38-24z"/>
+  </g>
+</svg>

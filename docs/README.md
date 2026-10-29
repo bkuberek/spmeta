@@ -67,3 +67,12 @@ The [decision index](./decisions/README.md) lists all ADRs and their status. ADR
 | File | Content |
 | --- | --- |
 | [architecture.webp](./assets/architecture.webp) | Architecture diagram: three backends behind one resolver (drawn with the original `nowplaying` name) |
+| [spmeta-banner.svg](./assets/spmeta-banner.svg) | Project banner (1600×800), editable source |
+| [spmeta-banner.png](./assets/spmeta-banner.png) | Project banner rendered from the SVG; used by the top-level README and as the GitHub social preview |
+| [spmeta-mark.svg](./assets/spmeta-mark.svg) | Monochrome mark: a play triangle in square brackets; uses `currentColor` |
+
+To regenerate the PNG after editing the banner SVG, run:
+
+```bash
+rsvg-convert -o docs/assets/spmeta-banner.png docs/assets/spmeta-banner.svg
+```
