@@ -24,6 +24,7 @@ Status values:
 | [0006](./0006-dependencies.md) | Keep runtime dependencies to godbus and BurntSushi/toml | Accepted |
 | [0007](./0007-macos-applescript-access.md) | Read Spotify.app on macOS through AppleScript with a process guard | Accepted |
 | [0008](./0008-versioning-and-release.md) | Version with SemVer, generate the changelog, and automate releases | Accepted |
+| [0009](./0009-windows-support.md) | Support Windows: Web mode first, then a media-session backend | Proposed |
 
 ## Adding a record
 
