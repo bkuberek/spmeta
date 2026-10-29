@@ -1,0 +1,18 @@
+{
+  "device": {
+    "id": "d0f1a2b3c4d5e6f708192a3b4c5d6e7f80910a1b",
+    "is_active": true,
+    "is_private_session": false,
+    "is_restricted": false,
+    "name": "Living Room",
+    "type": "Speaker",
+    "volume_percent": 55
+  },
+  "repeat_state": "off",
+  "shuffle_state": false,
+  "timestamp": 1761586800000,
+  "progress_ms": 0,
+  "is_playing": false,
+  "item": null,
+  "currently_playing_type": "unknown"
+}

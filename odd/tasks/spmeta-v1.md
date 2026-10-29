@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done and T12 code done on feat/web-mode, T12 real login pending; T13 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done and T12 code done on feat/web-mode, T12 real login pending; T13 done; T14 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -307,7 +307,24 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T13 Web backend
 
-- [ ] T13 complete
+- [x] T13 complete (branch `feat/web-mode`)
+- Evidence (2026-10-29):
+  - RED: build failure on `undefined: Backend` and `TokenSource`. With a stub, 48 top-level tests failed (104 including subtests).
+  - GREEN: 50 top-level tests pass, also with `-count=20 -race`.
+  - Mutation checks, each caught: the 1 MiB body cap, the redirect guard, width instead of area for images, the 429 attempt cap, the second-401 check, and the token filter on the 403 message.
+  - `go test -race -count=1 ./...` passes, `go vet` is clean, `golangci-lint` reports 0 issues, and the linux and windows builds compile. The parent re-ran tests and lint.
+  - Golden outputs validate against the schema, and requests go only to the injected base URL.
+  - API: `web.Backend{Tokens, Endpoints, HTTPClient, Now, Sleep, Log, MaxRetryWait, Version}` with `Read` and `Source`. `web.TokenSource` is a one-method interface that `*auth.TokenSource` satisfies. `web.OneShotRetryWait` is 10 s.
+  - Spec clarifications in backend-web.md, data-model.md and testing.md:
+    - the 5 s timeout applies to each attempt;
+    - redirects are not followed;
+    - 401, 5xx and 429 have separate retry budgets;
+    - an invalid `Retry-After` falls back to 5 s, and values are capped at 24 h;
+    - a 403 shows its message only when it is one safe line;
+    - the largest image is chosen by area, and non-HTTPS images are skipped;
+    - an item during an ad gets `type: ad`.
+  - Open: the position of `QUOTA_EXCEEDED` in a real 429 body is unconfirmed (both places are read). The `--debug` Client ID mismatch log goes to T14.
+  - Actual: about 616 non-test lines plus about 1,170 test lines against a 500 forecast.
 - Goal: `GET /v1/me/player` with the full response table, retries, rate limits and mapping.
 - Files: `internal/backend/web/{client.go,mapping.go,web.go,*_test.go,testdata/*}`.
 - Test-first: RED `httptest.Server` tests for every row of the response table and every Web fixture in [testing.md](../../docs/design/testing.md): 204, ad, null item, 401-refresh-retry, second 401, 403 hint, 429 within and beyond `MaxRetryWait`, `QUOTA_EXCEEDED` message, 5xx retry, largest image selection, episode mapping, local file.

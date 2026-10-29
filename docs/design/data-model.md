@@ -124,7 +124,7 @@ This table replaces the PRD's original table. Corrections from research and the 
 | `position_ms` | `(player position * 1000) as integer`, computed in the script | `Position` (microseconds / 1000); see the Spotify desktop rule | `progress_ms` | |
 | `uri` | `id` (fallback `spotify url`) | Normalized `mpris:trackid`; fallback parsed from `xesam:url` | `item.uri` | macOS: `id` and `spotify url` both return the URI |
 | `url` | Derived from `uri` | `xesam:url` when it starts with `https://open.spotify.com/`; else derived from `uri` | `item.external_urls.spotify`; else derived from `uri` | macOS: `spotify url` is not a web URL |
-| `artwork_url` | `artwork url` | `mpris:artUrl`; `https://open.spotify.com/image/<hash>` is rewritten to `https://i.scdn.co/image/<hash>` | Largest of `item.album.images[]` (tracks) or `item.images[]` (episodes) | Linux rewrite is inferred; verify in the manual matrix |
+| `artwork_url` | `artwork url` | `mpris:artUrl`; `https://open.spotify.com/image/<hash>` is rewritten to `https://i.scdn.co/image/<hash>` | Largest of `item.album.images[]` (tracks) or `item.images[]` (episodes, else `item.show.images[]`) | Linux rewrite is inferred; verify in the manual matrix. Web: images that are not HTTPS are skipped |
 | `isrc` | null | null | `item.external_ids.isrc` | Restored in March 2026; may be absent |
 | `explicit` | null | null | `item.explicit` | |
 | `device` | null | null | `device.name`, `device.type`, `device.volume_percent` | |

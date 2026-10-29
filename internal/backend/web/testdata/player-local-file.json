@@ -1,0 +1,41 @@
+{
+  "device": {
+    "id": "e1a2b3c4d5e6f708192a3b4c5d6e7f80910a1b2c",
+    "is_active": true,
+    "is_private_session": false,
+    "is_restricted": false,
+    "name": "MacBook Pro",
+    "type": "Computer",
+    "volume_percent": 80
+  },
+  "repeat_state": "off",
+  "shuffle_state": false,
+  "timestamp": 1761586800000,
+  "progress_ms": 12000,
+  "is_playing": true,
+  "item": {
+    "album": {
+      "album_type": "album",
+      "id": null,
+      "images": [],
+      "name": "Home",
+      "type": "album",
+      "uri": null,
+      "artists": [{"name": "Alvan", "type": "artist", "uri": null}]
+    },
+    "artists": [{"name": "Alvan", "type": "artist", "uri": null}],
+    "disc_number": 0,
+    "duration_ms": 238000,
+    "explicit": false,
+    "external_ids": {},
+    "external_urls": {},
+    "href": null,
+    "id": null,
+    "is_local": true,
+    "name": "Amazone",
+    "track_number": 0,
+    "type": "track",
+    "uri": "spotify:local:Alvan:Home:Amazone:238"
+  },
+  "currently_playing_type": "track"
+}
