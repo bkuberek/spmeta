@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: spmeta
+
+builds:
+  - id: spmeta
+    main: ./cmd/spmeta
+    binary: spmeta
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+release:
+  mode: keep-existing
+
+nfpms:
+  - package_name: spmeta
+    description: Now-playing metadata for Spotify
+    homepage: https://github.com/bkuberek/spmeta
+    maintainer: "Bastian Kuberek <bastian@bkuberek.com>"
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+
+homebrew_casks:
+  - name: spmeta
+    binaries: [spmeta]
+    repository:
+      owner: bkuberek
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/bkuberek/spmeta
+    description: Now-playing metadata for Spotify
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/spmeta"]
+          end

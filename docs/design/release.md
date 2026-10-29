@@ -1,6 +1,6 @@
 # Release
 
-This document defines how `spmeta` is versioned, how the changelog is produced, how releases are built and published, and what the user must set up before the first release. The policy is [ADR 0008](../decisions/0008-versioning-and-release.md): Semantic Versioning, a `CHANGELOG.md` generated from Conventional Commits, and automated releases are accepted, and so are the tools named here.
+This document defines how `spmeta` is versioned, how the changelog is produced, how releases are built and published, and what is set up outside the repository. The policy is [ADR 0008](../decisions/0008-versioning-and-release.md): Semantic Versioning, a `CHANGELOG.md` generated from Conventional Commits, and automated releases are accepted, and so are the tools named here.
 
 ## Versioning
 
@@ -16,7 +16,7 @@ This document defines how `spmeta` is versioned, how the changelog is produced, 
   | Only `docs`, `refactor`, `test`, `chore`, `ci` | No release | No release |
 
 - Breaking changes include an incompatible JSON schema change (which also increments `schema_version`), a changed exit-code meaning, and a removed or renamed flag, environment variable, or configuration key.
-- If the local-only cut is released ([ADR 0004](../decisions/0004-web-api-built-last.md)), it is v0.1.0 and the Web milestones ship as v0.2.0. Otherwise the first release, v0.1.0, includes Web mode.
+- The first release is the local-only cut ([ADR 0004](../decisions/0004-web-api-built-last.md)): v0.1.0 ships macOS and Linux local mode, and the Web milestones ship as v0.2.0.
 
 ## Version in the binary
 
@@ -44,7 +44,7 @@ release-please (on every push to main)
   opens or updates the release pull request:
   CHANGELOG.md section + version bump in .release-please-manifest.json
   |
-  |  a maintainer merges the release pull request
+  |  a maintainer reviews and merges the release pull request (admin merge, see below)
   v
 release-please creates tag vX.Y.Z and the GitHub Release (notes = the CHANGELOG section)
   |
@@ -54,40 +54,19 @@ goreleaser release --clean (checks out the tag)
   builds darwin/linux x amd64/arm64, archives, checksums.txt, .deb, .rpm
   |
   +--> uploads assets to the existing GitHub Release (release.mode: keep-existing)
-  +--> pushes Formula/spmeta.rb to bkuberek/homebrew-tap
+  +--> pushes Casks/spmeta.rb to bkuberek/homebrew-tap
   +--> the tag makes the version available to go install through the Go module proxy
 ```
 
 goreleaser runs as a second job of the release-please workflow because tags created with the workflow's `GITHUB_TOKEN` do not trigger other workflows. Its changelog is disabled, so `CHANGELOG.md` and the release-please notes are the single source of truth.
 
+The release pull request is opened with the workflow's `GITHUB_TOKEN`, and GitHub does not start workflows for events caused by that token. CI therefore never runs on the release pull request, and the required checks on `main` never report on it. The maintainer reviews it and merges it with `gh pr merge --admin --rebase <number>`. This is safe because the release pull request changes only `CHANGELOG.md` and `.release-please-manifest.json`, and CI already passed on every commit it describes. A personal access token for release-please is deliberately not used.
+
 ## Files created in task T15
 
 ### `release-please-config.json`
 
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "packages": {
-    ".": {
-      "release-type": "go",
-      "package-name": "spmeta",
-      "include-component-in-tag": false,
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "changelog-sections": [
-        { "type": "feat", "section": "Features" },
-        { "type": "fix", "section": "Bug Fixes" },
-        { "type": "perf", "section": "Performance" },
-        { "type": "docs", "section": "Documentation", "hidden": true },
-        { "type": "refactor", "section": "Refactoring", "hidden": true },
-        { "type": "test", "section": "Tests", "hidden": true },
-        { "type": "chore", "section": "Chores", "hidden": true },
-        { "type": "ci", "section": "CI", "hidden": true }
-      ]
-    }
-  }
-}
-```
+The package settings are the ones in ADR 0008: release type `go`, no component in the tag (tags are `vX.Y.Z`), `bump-minor-pre-major: true` so a breaking change before 1.0.0 bumps the minor version, and `bump-patch-for-minor-pre-major: false` so a `feat` bumps the minor version. `docs`, `refactor`, `test`, `chore`, and `ci` sections are hidden, so those commits never open a release pull request by themselves. See the file for the full `changelog-sections` list.
 
 ### `.release-please-manifest.json`
 
@@ -95,130 +74,76 @@ goreleaser runs as a second job of the release-please workflow because tags crea
 { ".": "0.0.0" }
 ```
 
-The first release is pinned to v0.1.0 with a commit whose message carries the footer `Release-As: 0.1.0`.
+The manifest starts at `0.0.0` because nothing has been released. The first release is pinned to v0.1.0 with a commit whose body carries the footer `Release-As: 0.1.0` (release-please reads it case-insensitively from the commit body of a commit on `main`; [documented here](https://github.com/googleapis/release-please#how-do-i-change-the-version-number)). If the first release pull request proposes a different version, set `"release-as": "0.1.0"` on the package in `release-please-config.json` ([manifest releaser](https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md)) and remove it again after the release; otherwise later runs keep using that version.
 
 ### `.github/workflows/release.yml`
 
-```yaml
-name: release
-on:
-  push:
-    branches: [main]
-permissions:
-  contents: write
-  pull-requests: write
-jobs:
-  release-please:
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-    steps:
-      - id: release
-        uses: googleapis/release-please-action@v4
-  goreleaser:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-          fetch-depth: 0
-      - uses: actions/setup-go@v7
-        with:
-          go-version: stable
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-```
+Two jobs on every push to `main`:
 
-The action major versions above are from memory; task T15 pins each action to its current major version (or a commit SHA) at implementation time.
+1. `release-please` runs `googleapis/release-please-action@v5` with the config and manifest above, and exposes `release_created` and `tag_name`. It needs `contents`, `issues`, and `pull-requests` write permissions (it maintains the release pull request and its labels).
+2. `goreleaser` needs the first job and runs only when `release_created == 'true'`. It checks out the tag with full history, installs Go, and runs `goreleaser/goreleaser-action@v7` with `version: v2.19.0` and `args: release --clean`. It reads `GITHUB_TOKEN` and the secret `HOMEBREW_TAP_GITHUB_TOKEN`.
+
+A `concurrency` group serializes release runs. Pinned versions and why:
+
+| Component | Pin | Evidence |
+| --- | --- | --- |
+| `googleapis/release-please-action` | `v5` (v5.0.0, 2026-04-22) | The only breaking change from v4 is the runtime upgrade to Node 24 ([#1188](https://github.com/googleapis/release-please-action/issues/1188)); the inputs `config-file` and `manifest-file` are unchanged in `action.yml`, and v5 added no required inputs |
+| `goreleaser/goreleaser-action` | `v7` (v7.3.0, 2026-10-12) | v7.0.0 is the Node 24 and ESM upgrade (`feat!`); the inputs `distribution`, `version`, `args`, `workdir`, and `install-only` are unchanged (v7 added `version-file`) |
+| goreleaser | `v2.19.0` (2026-10-22) | The latest stable release at implementation time. `brews` is deprecated since v2.10 (soft) and v2.16 (hard) in favor of `homebrew_casks`; the `hooks.post.install_steps` form used below is "since v2.19" in the [docs](https://goreleaser.com/customization/homebrew_casks/). An exact version keeps releases reproducible; bump it deliberately |
+| `actions/checkout`, `actions/setup-go` | `v7` | The same majors as `ci.yml` |
 
 ### `.goreleaser.yaml`
 
-```yaml
-version: 2
-project_name: spmeta
+- One build, `./cmd/spmeta`, for `darwin` and `linux` on `amd64` and `arm64`, with `CGO_ENABLED=0`, `-trimpath`, and the `-X` ldflags from "Version in the binary".
+- `tar.gz` archives named `spmeta_<version>_<os>_<arch>` that contain the binary, `LICENSE`, and `README.md`, and one `checksums.txt`. `CHANGELOG.md` is not in the archives: goreleaser fails on a file pattern that matches nothing, and the file does not exist until the first release pull request merges, so `release-check` would fail until then.
+- `changelog.disable: true` and `release.mode: keep-existing`.
+- `nfpms` builds `.deb` and `.rpm` packages (maintainer `Bastian Kuberek <bastian@bkuberek.com>`, license MIT, binary in `/usr/bin`).
+- `homebrew_casks` pushes `Casks/spmeta.rb` to `bkuberek/homebrew-tap` with the token `HOMEBREW_TAP_GITHUB_TOKEN`. A post-install hook removes the quarantine flag on macOS:
 
-builds:
-  - id: spmeta
-    main: ./cmd/spmeta
-    binary: spmeta
-    env: [CGO_ENABLED=0]
-    goos: [darwin, linux]
-    goarch: [amd64, arm64]
-    flags: [-trimpath]
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+  ```yaml
+  hooks:
+    post:
+      install_steps: |
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/spmeta"]
+        end
+  ```
 
-archives:
-  - formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, README.md, CHANGELOG.md]
+  The goreleaser documentation warns that this bypasses macOS security and may stop working in a future macOS version; signing and notarization is the lasting fix.
 
-checksum:
-  name_template: checksums.txt
+The generated cask has `on_macos` and `on_linux` blocks, each with `on_arm` and `on_intel` archives, a `binary "spmeta"` stanza, and the hook as a `postflight_steps` block. Homebrew documents the `postflight_steps` DSL and requires it for casks in official taps; its docs do not state the Homebrew version that introduced it, so a very old Homebrew may reject the cask.
 
-changelog:
-  disable: true
+### `ci.yml` job `release-check`
 
-release:
-  mode: keep-existing
+On every push and pull request, `release-check` runs `goreleaser check` and then `goreleaser release --snapshot --clean --skip=publish` with the same pinned action and goreleaser version. It needs no secrets.
 
-nfpms:
-  - package_name: spmeta
-    description: Now-playing metadata for Spotify
-    homepage: https://github.com/bkuberek/spmeta
-    maintainer: "Bastian Kuberek <bastian@bkuberek.com>"
-    license: MIT
-    formats: [deb, rpm]
-    bindir: /usr/bin
+## Why a cask, and does it work on Linux
 
-brews:
-  - name: spmeta
-    repository:
-      owner: bkuberek
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: https://github.com/bkuberek/spmeta
-    description: Now-playing metadata for Spotify
-    license: MIT
-    install: |
-      bin.install "spmeta"
-    test: |
-      system "#{bin}/spmeta", "version"
-```
+goreleaser's `brews` (formula) section is deprecated: soft since v2.10 and hard since v2.16, and the page says generating formulae for prebuilt binaries was the only Linuxbrew option "at the time, but this is no longer true, and _Casks_ should be used instead" ([goreleaser deprecations](https://goreleaser.com/deprecations/)). `spmeta` therefore uses `homebrew_casks`.
 
-Run `goreleaser check` before committing. Key names (`formats`, `directory`, `brews`) follow goreleaser v2 as remembered; `goreleaser check` is the authority. If `brews` reports a deprecation warning in favor of `homebrew_casks`, keep the formula for v1 ([ADR 0008](../decisions/0008-versioning-and-release.md)).
+Casks install on Linux with a recent Homebrew. Homebrew 4.5.0 (2025-04-29) added "preliminary Linux support for casks": "Some Homebrew casks are supported on Linux. Right now these are mostly fonts and those with Linux binaries" ([Homebrew 4.5.0](https://brew.sh/2025/04/29/homebrew-4.5.0/)). The Cask Cookbook states that the `binary` artifact "works on either operating system" and that cross-platform casks scope OS-specific stanzas in `on_macos` or `on_linux` blocks ([Cask Cookbook](https://docs.brew.sh/Cask-Cookbook)). The goreleaser-generated cask follows that shape. "Preliminary" means Linux cask support may change; the `.deb`, `.rpm`, and archive channels do not depend on it. The Linux install of the cask has not been run yet; the post-release checklist covers it.
 
 ## Distribution channels
 
 | Channel | Command for users | Produced by |
 | --- | --- | --- |
-| Homebrew (macOS, Linux) | `brew install bkuberek/tap/spmeta` | goreleaser `brews` |
+| Homebrew (macOS, Linux) | `brew install --cask bkuberek/tap/spmeta` | goreleaser `homebrew_casks` |
 | Debian, Ubuntu | `sudo apt install ./spmeta_0.1.0_linux_amd64.deb` | goreleaser `nfpms` |
 | Fedora, RHEL | `sudo dnf install ./spmeta_0.1.0_linux_amd64.rpm` | goreleaser `nfpms` |
 | Archive | Download from GitHub Releases, verify with `checksums.txt` | goreleaser `archives` |
 | Go | `go install github.com/bkuberek/spmeta/cmd/spmeta@latest` | The tag |
 
-macOS binaries are not signed or notarized in v1. Homebrew and `go install` installs are not quarantined. A manually downloaded archive needs `xattr -d com.apple.quarantine ./spmeta` before the first run; the README says so.
+macOS binaries are not signed or notarized in v1. Homebrew installs run the quarantine-removal hook, and `go install` builds locally, so neither is quarantined. A manually downloaded archive needs `xattr -d com.apple.quarantine ./spmeta` before the first run; the README says so.
 
-## Required from the user
+## Repository setup
 
-The release automation needs these one-time steps by the user. No secret values belong in the repository or in these documents.
+These one-time steps are done. No secret values belong in the repository or in these documents.
 
-1. Decide to publish the repository, then create `github.com/bkuberek/spmeta` and push.
-2. Confirm the license (MIT recommended) and the public maintainer email for Linux packages.
-3. Create the repository `github.com/bkuberek/homebrew-tap` with a `Formula/` directory.
-4. Create a fine-grained personal access token with "Contents: read and write" on `bkuberek/homebrew-tap` only, and store it as the Actions secret `HOMEBREW_TAP_GITHUB_TOKEN` in `bkuberek/spmeta`.
-5. In `bkuberek/spmeta` settings, enable "Allow GitHub Actions to create and approve pull requests" (release-please needs it), allow only "Rebase and merge," and protect `main` with the required checks `test`, `lint`, `integration`, and `commits`.
+1. `github.com/bkuberek/spmeta` is published, with the MIT license and the maintainer email `bastian@bkuberek.com` for Linux packages.
+2. `github.com/bkuberek/homebrew-tap` exists and is public. goreleaser creates the `Casks/` directory on the first push; the placeholder `Formula/.gitkeep` is harmless.
+3. The Actions secret `HOMEBREW_TAP_GITHUB_TOKEN` in `bkuberek/spmeta` holds a fine-grained personal access token with "Contents: read and write" on `bkuberek/homebrew-tap` only.
+4. "Allow GitHub Actions to create and approve pull requests" is enabled, and only "Rebase and merge" is allowed.
+5. `main` is protected with these required checks, which are the full job names of the matrix: `test (ubuntu-latest, go stable)`, `test (ubuntu-latest, go oldstable)`, `test (macos-latest, go stable)`, `test (macos-latest, go oldstable)`, `lint`, `integration`, and `commits`. `release-check` is not required.
 
 ## Release checklist
 
@@ -228,11 +153,12 @@ Before merging a release pull request:
 2. Confirm the manual matrix rows for the shipped backends are recorded ([testing.md](./testing.md)).
 3. Read the release pull request's `CHANGELOG.md` section; if a change is missing or misclassified, fix it with a follow-up commit (for example a `fix:` commit), not by editing the changelog.
 4. Confirm the version bump matches the table in Versioning, in particular that breaking changes before 1.0.0 bump the minor version.
-5. Merge the release pull request.
+5. Merge the release pull request with `gh pr merge --admin --rebase <number>`; its required checks never run (see Release flow).
+6. For the first release, confirm the pull request proposes v0.1.0 (the `Release-As: 0.1.0` footer).
 
 After the release workflow finishes:
 
 1. Confirm the GitHub Release lists four archives, `checksums.txt`, two `.deb`, and two `.rpm` files.
-2. Run `brew install bkuberek/tap/spmeta && spmeta version` on macOS and confirm the version.
+2. Run `brew install --cask bkuberek/tap/spmeta && spmeta version` on macOS and confirm the version; on a Linux machine with a current Homebrew, run the same command and record the result.
 3. Run `go install github.com/bkuberek/spmeta/cmd/spmeta@vX.Y.Z` and confirm `spmeta version`.
 4. Install the `.deb` on an Ubuntu machine or container and run `spmeta version`.

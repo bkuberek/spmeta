@@ -10,7 +10,7 @@ The PRD's working name `nowplaying` is taken on PyPI and is close to the `nowpla
 
 ## Decision
 
-Name the tool `spmeta`. Use the name for the binary, the Go module (`github.com/bkuberek/spmeta`), the Homebrew formula, the Linux packages, the configuration directory (`spmeta`), and the environment-variable prefix (`SPMETA_`). Describe the tool as "now-playing metadata for Spotify."
+Name the tool `spmeta`. Use the name for the binary, the Go module (`github.com/bkuberek/spmeta`), the Homebrew cask, the Linux packages, the configuration directory (`spmeta`), and the environment-variable prefix (`SPMETA_`). Describe the tool as "now-playing metadata for Spotify."
 
 ## Consequences
 

@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; release-cut decision next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 configured, v0.1.0 local-only release in progress; T11–T14 for v0.2.0). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -284,7 +284,18 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T15 Release automation
 
-- [ ] T15 complete
+- [ ] T15 complete (configuration done 2026-10-29; checked off after the v0.1.0 release run publishes)
+- Decision (2026-10-29): the user chose a local-only v0.1.0 now, with Web mode (T11–T14) as v0.2.0. The T10 manual-matrix rows stay pending and do not block the release.
+- Evidence (2026-10-29):
+  - Pins (release notes read with `gh api`): `googleapis/release-please-action@v5` (v5.0.0; the only breaking change is Node 24) and `goreleaser/goreleaser-action@v7` (v7.3.0; Node 24/ESM; inputs unchanged). goreleaser is pinned to exactly `v2.19.0`, the first version with `hooks.post.install_steps`.
+  - `homebrew_casks` replaces the deprecated `brews` (soft since v2.10, hard since v2.16). It writes the cask to `Casks/` in `bkuberek/homebrew-tap` and runs a post-install `xattr` step that removes the macOS quarantine flag. Homebrew 4.5.0 and later supports casks with Linux binaries. Users install with `brew install --cask bkuberek/tap/spmeta`.
+  - `goreleaser check` validated the configuration. `release --snapshot --clean --skip=publish` produced 4 archives, `checksums.txt`, 2 `.deb`, 2 `.rpm` and the cask. `./dist/spmeta_darwin_arm64_v8.0/spmeta version` printed `0.0.0-SNAPSHOT-e304622`. `actionlint`, `go test`, `go vet` and `golangci-lint` all pass. The parent re-ran `actionlint`.
+  - Deviations from the original release.md (the doc is updated):
+    - `CHANGELOG.md` is not in the archives, because goreleaser fails on a pattern that matches nothing before the first release.
+    - The `release-please` job has `issues: write` and a serializing concurrency group.
+    - Release PRs are merged with `gh pr merge --admin --rebase`, because PRs opened with `GITHUB_TOKEN` do not trigger CI.
+    - ADRs 0003 and 0008 now say cask.
+  - The first release commit carries the footer `Release-As: 0.1.0`. The fallback is `"release-as"` in the config.
 - Goal: release-please and goreleaser wired per [release.md](../../docs/design/release.md); SemVer bumps and `CHANGELOG.md` generated from Conventional Commits.
 - Files: `release-please-config.json`, `.release-please-manifest.json`, `.github/workflows/release.yml`, `.goreleaser.yaml`, `.github/workflows/ci.yml` (`release-check` job), `README.md` (install section), `LICENSE` (if not added in T1).
 - Test-first exception: configuration only; no runnable RED. Checks instead: `goreleaser check`, `goreleaser release --snapshot --clean --skip=publish` (artifacts for four targets, binary prints the injected version), plus the three standard checks.
@@ -356,4 +367,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-Run the pending local manual-matrix rows with the user, then the user decides on the release cut: local-only v0.1.0 (T15 now) or T11–T14 first.
+Merge the T15 PR, then the release-please PR (admin rebase merge), and verify v0.1.0: GitHub Release assets, the cask in the tap, and `brew install --cask bkuberek/tap/spmeta`. Then T11 (Web auth core) toward v0.2.0. The T10 manual-matrix rows are still pending with the user.

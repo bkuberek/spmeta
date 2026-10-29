@@ -9,15 +9,47 @@ $ spmeta
 
 `spmeta` is an independent project and is not affiliated with, endorsed by, or sponsored by Spotify. "Spotify" is a trademark of Spotify AB.
 
-Status: pre-release. There is no published release yet, so build it from source.
+Status: early release. `spmeta` reads the Spotify client on this machine; [Web mode](#web-mode-upcoming) comes later.
 
 ## Install
+
+**Homebrew** (macOS and Linux) installs a prebuilt binary from the `bkuberek/tap` tap as a cask:
+
+```bash
+brew install --cask bkuberek/tap/spmeta
+```
+
+`spmeta` is a command-line binary, so it is published as a cask rather than a formula, because GoReleaser deprecated generating formulae for prebuilt binaries ([deprecations](https://goreleaser.com/deprecations/)). Homebrew on Linux has supported casks that ship Linux binaries since Homebrew 4.5.0 ([release notes](https://brew.sh/2025/04/29/homebrew-4.5.0/)); the `spmeta` cask has Linux builds for amd64 and arm64. Update Homebrew first if the install fails on Linux. The cask removes the macOS quarantine flag from the binary after install, because release binaries are not signed or notarized yet.
+
+**Debian and Ubuntu** (`.deb`) and **Fedora and RHEL** (`.rpm`) packages are attached to each [GitHub Release](https://github.com/bkuberek/spmeta/releases) for amd64 and arm64. Replace `0.1.0` and `amd64` as needed:
+
+```bash
+sudo apt install ./spmeta_0.1.0_linux_amd64.deb
+sudo dnf install ./spmeta_0.1.0_linux_amd64.rpm
+```
+
+**Archives** (`.tar.gz` for macOS and Linux, amd64 and arm64) are on the same page, together with `checksums.txt`. Verify a download before you unpack it:
+
+```bash
+grep spmeta_0.1.0_linux_amd64.tar.gz checksums.txt | shasum -a 256 -c
+tar -xzf spmeta_0.1.0_linux_amd64.tar.gz spmeta
+```
+
+On macOS, a manually downloaded binary is quarantined and the binary is not signed, so macOS refuses to run it. Remove the flag once, before the first run:
+
+```bash
+xattr -d com.apple.quarantine ./spmeta
+```
+
+Installs through Homebrew and `go install` are not affected.
+
+**Go** builds from source and needs Go 1.26 or newer:
 
 ```bash
 go install github.com/bkuberek/spmeta/cmd/spmeta@latest
 ```
 
-This needs Go 1.26 or newer. Homebrew (`brew install bkuberek/tap/spmeta`) and `.deb` and `.rpm` packages come with the first release.
+Check the result with `spmeta version`.
 
 ## Usage
 
