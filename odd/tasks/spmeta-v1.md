@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done and T12 code done on feat/web-mode, T12 real login pending; T13 done; T14 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T13 done on feat/web-mode; T14 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -273,7 +273,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T12 Login flow and auth commands
 
-- [ ] T12 complete (code done 2026-10-29; the manual real-login acceptance is pending with the user)
+- [x] T12 complete (cddfe47, plus the port-default follow-up; real login 2026-10-29)
 - Evidence (2026-10-29):
   - RED: build failures on `auth.Login`, `auth.LoginOptions` and `cli.WithAuthEndpoints`. With a stub `Login`, 22 tests failed.
   - Mutation checks: an off-by-one in the 14-day warning, an inverted state check, and a trailing `/` on the redirect URI were each caught.
@@ -295,7 +295,16 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
   - Hint capitalization is aligned in architecture.md and backend-web.md.
   - The T8 "not logged in" message stays for T14, because no Web backend exists yet. T14 must also update README's `--source web` line.
   - Actual: about 1,720 lines including tests, against a 400 forecast.
-- Pending (manual): one real `spmeta auth login` against the user's Spotify app. This is the first real test that Spotify accepts a portless registered loopback redirect URI at a random port; the fallback is a fixed port with `--port`.
+- Manual acceptance (2026-10-29):
+  - The Spotify Developer Dashboard rejected the portless `http://127.0.0.1/callback` ("This redirect URI is not secure."), although Spotify's redirect URI docs allow it.
+  - With `http://127.0.0.1:8974/callback` registered, `spmeta auth login --client-id … --port 8974` succeeded, after the user added their own account (the app owner) under User Management.
+  - `auth status` exited 0 with scope `user-read-playback-state` and refresh expiry about 2027-04-29. The token file is 0600 and its directory 0700.
+- Follow-up (test-first):
+  - `auth.DefaultLoginPort = 8974` is now the `--port` default, and `--port 0` still picks any free port.
+  - The setup text and the refused-login hint name `http://127.0.0.1:8974/callback`. Setup step 3 says to add the listening account even if it owns the app.
+  - Tests use `cli.WithDefaultLoginPort` to bind a free port, and one test asserts the real default.
+  - Docs updated: backend-web.md, cli.md, research/web-api.md, product/prd.md.
+  - The writer also edited `internal/cli/read.go` (the option hook) and `usage.go` (the `--port` help line). Both are outside its stated surface; the parent reviewed and accepted them.
 - Goal: the loopback login server and `spmeta auth login|logout|status`.
 - Files: `internal/auth/{login.go,login_test.go}`, `internal/cli/{auth.go,auth_test.go}`, `internal/cli/usage.go`.
 - Test-first: RED login tests with an injected opener calling the callback: success, state mismatch ignored, `error=access_denied` exit 5, 180 s timeout (injected clock) exit 5, redirect URI byte-identical, port in use exit 1; command tests for missing Client ID (setup text, exit 2), logout idempotent, status output and exit 0 versus 4, expiry warning within 14 days, mode warning.
@@ -323,6 +332,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
     - a 403 shows its message only when it is one safe line;
     - the largest image is chosen by area, and non-HTTPS images are skipped;
     - an item during an ad gets `type: ad`.
+  - Live check (2026-10-29): a scratch test outside git called `web.Backend` with the real token while the user played on their phone. It returned the phone's track in 0.32 s (`source: web`, `state: playing`, device `BKS25`/`Smartphone`). `isrc` was null because Spotify omitted `external_ids`, which data-model.md allows.
   - Open: the position of `QUOTA_EXCEEDED` in a real 429 body is unconfirmed (both places are read). The `--debug` Client ID mismatch log goes to T14.
   - Actual: about 616 non-test lines plus about 1,170 test lines against a 500 forecast.
 - Goal: `GET /v1/me/player` with the full response table, retries, rate limits and mapping.
@@ -433,7 +443,8 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 - 2026-10-27: PRD inconsistencies corrected in P10: `artist` join separator typo (`" ,  "` → `", "`), FR-6 versus the edge-case table on `auto`, unnecessary `user-read-currently-playing` scope, missing `--player` in the CLI synopsis, "not logged in" listed under exit 4 while exit 5 says "auth required" (resolved as above).
 
 - 2026-10-27: macOS latency (T5): the full read script takes 0.22–0.27 s (budget 300 ms); precompiling with `osacompile` gives no gain; `properties of current track` fails with -10000 in AppleScript and JXA, so all fields cannot be fetched in one Apple event.
+- 2026-10-29: The Spotify Developer Dashboard rejects a portless loopback redirect URI (`http://127.0.0.1/callback`: "This redirect URI is not secure."), although https://developer.spotify.com/documentation/web-api/concepts/redirect_uri allows one. spmeta therefore defaults to `http://127.0.0.1:8974/callback`. In Development Mode, the app owner must also be added under User Management.
 
 ## Next step
 
-T11 (Web auth core) toward v0.2.0, on a feature branch with a PR. The T10 manual-matrix rows are still pending with the user.
+T14 (Web integration) on `feat/web-mode`, then a single PR for T11–T14 and the v0.2.0 release PR. The T10 manual-matrix rows are still pending with the user.

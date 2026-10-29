@@ -53,7 +53,7 @@ Commands:
 
 Flags:
       --client-id ID  Client ID of your Spotify app (login only; default SPMETA_CLIENT_ID, then client_id in the configuration file)
-      --port PORT     Loopback port for the browser callback (login only; default: any free port)
+      --port PORT     Loopback port for the browser callback (login only; default: 8974; 0 picks any free port)
       --no-browser    Print the login URL instead of opening a browser (login only)
       --debug         Write diagnostics to stderr, never tokens or codes (login only)
       --config PATH   Read this configuration file instead of the default

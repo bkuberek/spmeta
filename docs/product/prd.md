@@ -48,7 +48,7 @@ Details and sources: [research/web-api.md](../research/web-api.md).
 - **Player endpoints unchanged.** `GET /me/player` and `GET /me/player/currently-playing` still work. A 204 when nothing is active is widely observed but undocumented. `additional_types` "might be deprecated", so the mapping keys off `item.type`.
 - **Scope.** `GET /me/player` needs only `user-read-playback-state`. ([scopes](https://developer.spotify.com/documentation/web-api/concepts/scopes))
 - **Refresh tokens.** They expire 6 months after authorization; refreshing does not extend them. Users re-run `spmeta auth login` twice a year. ([refreshing tokens](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens))
-- **Redirect URI rules.** HTTPS, or a loopback literal `http://127.0.0.1` / `http://[::1]`; `localhost` is rejected. A loopback URI registered without a port accepts a dynamic port at request time. ([redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri))
+- **Redirect URI rules.** HTTPS, or a loopback literal `http://127.0.0.1` / `http://[::1]`; `localhost` is rejected. A loopback URI registered without a port accepts a dynamic port at request time. As of 2026-10-29 the dashboard rejects portless loopback URIs, so spmeta defaults to port 8974. ([redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri))
 - **Rate limits.** Quotas are counted per developer account over a rolling 30-second window; exceeding them returns 429 with `Retry-After`, and the body may carry `reason: QUOTA_EXCEEDED`. ([rate limits](https://developer.spotify.com/documentation/web-api/concepts/rate-limits))
 
 ## Users and use cases
@@ -266,14 +266,14 @@ Implementation spec: [backend-web.md](../design/backend-web.md). Evidence: [rese
 One-time user setup (documented in the README and printed by `auth login` when no Client ID is set):
 
 1. Create an app at the Spotify Developer Dashboard with an account that has Premium; enable Web API.
-2. Register the redirect URI `http://127.0.0.1/callback` with no port, so the CLI can use any free port.
+2. Register the redirect URI `http://127.0.0.1:8974/callback` (the dashboard rejects a portless URI as of 2026-10-29, so the CLI defaults to port 8974).
 3. Add your listening account to the app's user allowlist.
 4. Copy the Client ID into `spmeta auth login --client-id …` or the config file.
 
 Login flow:
 
 1. Generate a 64-character `code_verifier` (48 random bytes, base64url); `code_challenge` = base64url(SHA-256(verifier)) without padding; random `state`.
-2. Bind an HTTP server on `127.0.0.1` port 0 (or `--port`), then open `https://accounts.spotify.com/authorize` with `response_type=code`, `client_id`, `redirect_uri=http://127.0.0.1:<port>/callback`, `code_challenge_method=S256`, `code_challenge`, `state` and `scope=user-read-playback-state`. Also print the URL for headless use.
+2. Bind an HTTP server on `127.0.0.1` port 8974 (or `--port`), then open `https://accounts.spotify.com/authorize` with `response_type=code`, `client_id`, `redirect_uri=http://127.0.0.1:<port>/callback`, `code_challenge_method=S256`, `code_challenge`, `state` and `scope=user-read-playback-state`. Also print the URL for headless use.
 3. Accept one callback within 180 s; ignore a mismatched `state`; show a plain "You can close this tab" page.
 4. `POST https://accounts.spotify.com/api/token` with `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`, `code_verifier`. Store tokens with `expires_at = now + expires_in` and `authorized_at = now`.
 5. Refresh with `grant_type=refresh_token`, `refresh_token`, `client_id` when within 60 s of expiry or on a 401, under a file lock. Save the new `refresh_token` whenever one is returned. Refresh tokens expire 6 months after authorization; `invalid_grant` exits 5 with a re-login hint.

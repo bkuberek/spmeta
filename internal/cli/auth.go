@@ -36,8 +36,9 @@ const setupText = `spmeta: no Spotify Client ID is configured.
 Reading playback from other devices needs your own Spotify app. One-time setup:
   1. Sign in to https://developer.spotify.com/dashboard with an account that has
      Premium, and create an app with the Web API enabled.
-  2. Add the redirect URI http://127.0.0.1/callback, with no port.
-  3. In the app's user management, add the Spotify account you listen with.
+  2. Add the redirect URI http://127.0.0.1:8974/callback.
+  3. In the app's User Management, add the Spotify account you listen with,
+     even if it is the account that owns the app.
   4. Copy the Client ID and run: spmeta auth login --client-id <id>
      Or set client_id in %s (or SPMETA_CLIENT_ID) and run: spmeta auth login
 `
@@ -114,10 +115,18 @@ func failAuth(stderr io.Writer, log *slog.Logger, err error) int {
 	return backend.ExitCode(backend.KindOf(err))
 }
 
+// loginPort is the --port default: DefaultLoginPort unless a test replaced it.
+func (o options) loginPort() int {
+	if o.defaultLoginPort != 0 {
+		return o.defaultLoginPort
+	}
+	return auth.DefaultLoginPort
+}
+
 func runLogin(ctx context.Context, args []string, stdout, stderr io.Writer, opts options) int {
 	set := flag.NewFlagSet("spmeta auth login", flag.ContinueOnError)
 	clientID := set.String("client-id", "", "")
-	port := set.Int("port", 0, "")
+	port := set.Int("port", opts.loginPort(), "")
 	noBrowser := set.Bool("no-browser", false, "")
 	debug := set.Bool("debug", false, "")
 	configFile := set.String("config", "", "")

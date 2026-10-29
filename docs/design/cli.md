@@ -146,7 +146,7 @@ In watch mode, the process exits only on a fatal error (5 or 6), a usage error (
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--client-id` | from env or configuration | Spotify app Client ID |
-| `--port` | 0 (any free port) | Loopback port for the callback |
+| `--port` | 8974 | Loopback port for the callback. 0 picks any free port, which works only if the app registered a portless redirect URI; the dashboard currently rejects those |
 | `--no-browser` | off | Do not open a browser; only print the URL |
 | `--debug` | off | Write diagnostics to stderr; never tokens or codes |
 | `--config` | see Configuration file | Read this configuration file instead of the default |
@@ -154,7 +154,7 @@ In watch mode, the process exits only on a fatal error (5 or 6), a usage error (
 Behavior:
 
 - `--port` outside 0 to 65535 is a usage error (exit 2). A port that is already in use exits 1 with "port N is in use."
-- Without a Client ID from any layer, print the one-time setup steps (create an app, register `http://127.0.0.1/callback`, copy the Client ID) to stderr and exit 2. The Client ID is trimmed of surrounding whitespace.
+- Without a Client ID from any layer, print the one-time setup steps (create an app, register `http://127.0.0.1:8974/callback`, add your account under User Management even if it owns the app, copy the Client ID) to stderr and exit 2. The Client ID is trimmed of surrounding whitespace.
 - Print the authorization URL to stderr, open it with `open` (macOS) or `xdg-open` (Linux) unless `--no-browser`, and wait up to 180 s for the callback.
 - On success, write the token file, print `Logged in. Token stored at <path>.`, and exit 0.
 - If the user denies access, the callback times out, the code exchange is refused, or `spmeta` is interrupted while waiting, exit 5. A network failure or a 5xx from Spotify during the exchange exits 1.

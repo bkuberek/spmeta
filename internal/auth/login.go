@@ -28,14 +28,20 @@ const (
 	headerTimeout  = 5 * time.Second
 	maxDescription = 200
 
-	hintAppSettings = "Check the Client ID, and that http://127.0.0.1/callback is a redirect URI of your Spotify app."
+	hintAppSettings = "Check the Client ID, and that %s is a redirect URI of your Spotify app."
 )
+
+// DefaultLoginPort is the loopback port Login listens on unless told
+// otherwise. The Spotify dashboard rejects a redirect URI without a port, so
+// users register http://127.0.0.1:8974/callback.
+const DefaultLoginPort = 8974
 
 // LoginOptions configures Login. ClientID and Path are required; every other
 // zero value selects the production behavior.
 type LoginOptions struct {
 	ClientID string
-	// Port is the loopback port to listen on; 0 picks a free one.
+	// Port is the loopback port to listen on; 0 picks a free one, which only
+	// works for an app that registered a redirect URI without a port.
 	Port       int
 	Path       string // the token file to write
 	Endpoints  Endpoints
@@ -236,7 +242,7 @@ func exchangeCode(ctx context.Context, opts LoginOptions, log *slog.Logger, redi
 	var refused *tokenError
 	switch {
 	case errors.As(err, &refused):
-		return Token{}, loginRefused(refused, code)
+		return Token{}, loginRefused(refused, code, redirectURI)
 	case err != nil:
 		return Token{}, err
 	case resp.RefreshToken == "":
@@ -254,7 +260,7 @@ func exchangeCode(ctx context.Context, opts LoginOptions, log *slog.Logger, redi
 // loginRefused maps a 400 from the code exchange. The description is server
 // text, so it is shown only when it is one short printable line that does not
 // repeat the authorization code.
-func loginRefused(e *tokenError, code string) *backend.Error {
+func loginRefused(e *tokenError, code, redirectURI string) *backend.Error {
 	d := e.Description
 	if strings.Contains(d, code) || len(d) > maxDescription || strings.IndexFunc(d, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0 {
 		d = ""
@@ -262,7 +268,7 @@ func loginRefused(e *tokenError, code string) *backend.Error {
 	if d == "" {
 		d = e.Code
 	}
-	return &backend.Error{Kind: backend.KindAuthRequired, Message: withDetail("Spotify refused the login", d), Hint: hintAppSettings, Err: e}
+	return &backend.Error{Kind: backend.KindAuthRequired, Message: withDetail("Spotify refused the login", d), Hint: fmt.Sprintf(hintAppSettings, redirectURI), Err: e}
 }
 
 func authFailed(msg string) *backend.Error {
