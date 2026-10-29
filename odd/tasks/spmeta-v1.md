@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 configured, v0.1.0 local-only release in progress; T11–T14 for v0.2.0). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T14 for v0.2.0 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -224,7 +224,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
     - `--watch`: exit 0 on SIGINT.
   - First-run consent: the user saw and approved the macOS Automation prompt during the first live probe (2026-10-27). Doctor's own wait on the prompt was not exercised, because permission was already granted.
   - Deferred by the user (2026-10-28): SketchyBar or launchd as the responsible process (they have no status-bar plugin yet).
-  - Pending rows: paused; nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; Linux desktop players.
+  - Paused (2026-10-29, Homebrew-installed v0.1.0): `spmeta` printed `⏸ Send the Pain Below — Chevelle · … (0:46 / 4:12)` and exited 0.
+  - Pending rows: nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; Linux desktop players.
   - Follow-ups: `debugLogger` in `internal/cli/doctor.go` duplicates the slog setup in `read.go`. The "120 s" text in the doctor output mirrors `macos.permissionTimeout`. T14 replaces the static `web` line in `internal/doctor/doctor.go`.
   - Actual: about 1,520 lines (about 450 non-test Go, 190 README, 24 cli.md) against a 400 forecast.
 - Goal: `spmeta doctor` for local sources and the user-facing README.
@@ -284,7 +285,14 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T15 Release automation
 
-- [ ] T15 complete (configuration done 2026-10-29; checked off after the v0.1.0 release run publishes)
+- [x] T15 complete (PR #1, 4935507; v0.1.0 released 2026-10-29)
+- Release evidence (2026-10-29):
+  - The PR #1 checks (all 8, including `release-check`) passed, and it was rebase-merged.
+  - release-please opened PR #2, "chore(main): release 0.1.0", with `CHANGELOG.md`. It was merged with `gh pr merge 2 --admin --rebase`, as release.md documents.
+  - Release run 40931229652: release-please and goreleaser both succeeded. https://github.com/bkuberek/spmeta/releases/tag/v0.1.0 has 4 `.tar.gz`, 2 `.deb`, 2 `.rpm` and `checksums.txt`, and goreleaser pushed `Casks/spmeta.rb` to the tap.
+  - The `linux_arm64` `.deb` in `debian:stable-slim`: the checksum matched, `spmeta version` printed `0.1.0 (commit a5f67f7 …)`, and with no session bus it exited 4 with the documented hint.
+  - `brew install --cask bkuberek/tap/spmeta` on this Mac: linked `/opt/homebrew/bin/spmeta`, `spmeta version` printed 0.1.0, the binary carries no quarantine attribute, and `spmeta doctor` exited 0.
+  - The PR #1 commit has committer `bkuberek@gmail.com`, because GitHub's rebase merge uses the account's primary email. The user then made `bastian@bkuberek.com` primary, and later merges use it.
 - Decision (2026-10-29): the user chose a local-only v0.1.0 now, with Web mode (T11–T14) as v0.2.0. The T10 manual-matrix rows stay pending and do not block the release.
 - Evidence (2026-10-29):
   - Pins (release notes read with `gh api`): `googleapis/release-please-action@v5` (v5.0.0; the only breaking change is Node 24) and `goreleaser/goreleaser-action@v7` (v7.3.0; Node 24/ESM; inputs unchanged). goreleaser is pinned to exactly `v2.19.0`, the first version with `hooks.post.install_steps`.
@@ -367,4 +375,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-Merge the T15 PR, then the release-please PR (admin rebase merge), and verify v0.1.0: GitHub Release assets, the cask in the tap, and `brew install --cask bkuberek/tap/spmeta`. Then T11 (Web auth core) toward v0.2.0. The T10 manual-matrix rows are still pending with the user.
+T11 (Web auth core) toward v0.2.0, on a feature branch with a PR. The T10 manual-matrix rows are still pending with the user.
