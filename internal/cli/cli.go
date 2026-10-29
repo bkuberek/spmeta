@@ -28,17 +28,28 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info Buil
 	for _, opt := range opts {
 		opt(&o)
 	}
-	if len(args) > 0 && args[0] == "doctor" {
-		return runDoctor(ctx, args[1:], stdout, stderr, info, o)
+	if len(args) > 0 {
+		switch args[0] {
+		case "auth":
+			return runAuth(ctx, args[1:], stdout, stderr, o)
+		case "doctor":
+			return runDoctor(ctx, args[1:], stdout, stderr, info, o)
+		}
 	}
 	return runRoot(ctx, args, stdout, stderr, info, o)
 }
 
 func runHelp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
-		if args[0] == "doctor" && len(args) == 1 {
-			printDoctorUsage(stdout)
-			return exitOK
+		if len(args) == 1 {
+			switch args[0] {
+			case "auth":
+				printAuthUsage(stdout)
+				return exitOK
+			case "doctor":
+				printDoctorUsage(stdout)
+				return exitOK
+			}
 		}
 		return usageError(stderr, "no help available for %q", args[0])
 	}

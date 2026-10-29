@@ -55,6 +55,17 @@ Each user brings their own Client ID; a shared one would hit the 5-user cap.
 9. Exchange the code: `POST https://accounts.spotify.com/api/token`, `Content-Type: application/x-www-form-urlencoded`, body `grant_type=authorization_code`, `code`, `redirect_uri` (byte-identical to step 5), `client_id`, `code_verifier`.
 10. On 200, write the token file with `authorized_at = now` and `expires_at = now + expires_in`. On a 400 JSON error (`{"error": "...", "error_description": "..."}`), return `KindAuthRequired` with the description. Network errors and 5xx return `KindUnexpected`.
 
+Details the steps leave open:
+
+- `LoginOptions` has `ClientID` and `Path` (the token file), both required. `Port`, `Endpoints`, `HTTPClient`, `Open`, `Now`, `Sleep`, `Stderr`, and `Log` default to the production values when zero, except that a nil `Open` means "only print the URL" (`--no-browser`). `Login` returns the token as stored, read back from the file.
+- The listener is IPv4 only (`tcp4` on `127.0.0.1`). A busy port is recognized by `EADDRINUSE`, or `WSAEADDRINUSE` on Windows; any other listen failure is `KindUnexpected`: "could not listen on the loopback interface."
+- The callback server answers in plain text. A request to `/callback` with the right `state` but neither `code` nor `error` gets 400, "Missing authorization code. Return to the terminal.", and is ignored. Methods other than `GET` get 404. Only the first usable callback counts.
+- The `error` value is server-controlled text, so the message shows it only when it is a plain OAuth code (lowercase letters, digits, and underscores); otherwise the message is "Spotify authorization failed."
+- For a 400 from the code exchange, the message is "Spotify refused the login: <error_description>". The description is server text: it is shown only when it is one printable line of at most 200 bytes that does not contain the authorization code; otherwise the `error` code is shown, or nothing. The hint is "Check the Client ID, and that http://127.0.0.1/callback is a redirect URI of your Spotify app."
+- A 200 without a `refresh_token` is `KindUnexpected` ("the Spotify accounts service returned no refresh token."), because a token file without one is not valid.
+- Cancelling the context (Ctrl-C) while waiting is `KindAuthRequired`: "login was cancelled."
+- `auth.OpenBrowser(url)` is the default `Open`: it starts `open` or `xdg-open` without waiting, and returns an error on other platforms, which `Login` logs and ignores.
+
 ## Token file
 
 Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta/token.json`, directory 0700, file 0600.
@@ -77,7 +88,7 @@ Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta
 - `token.json.lock` (mode 0600), the lock file used by refresh, is created on first use and never deleted, because removing a lock file lets two processes lock different files. `auth logout` removes only `token.json`.
 - `client_id` is the ID used at login; refresh always uses it, even if the configuration now names another one (logged under `--debug`).
 - `authorized_at` is not changed by refresh, because refresh does not extend the refresh token's 6-month lifetime.
-- A missing file means "not logged in" (`KindNotAvailable`, exit 4, hint "run `spmeta auth login`"). A file that exists but cannot be read or parsed is `KindAuthRequired` (exit 5).
+- A missing file means "not logged in" (`KindNotAvailable`, exit 4, hint "Run `spmeta auth login`."). A file that exists but cannot be read or parsed is `KindAuthRequired` (exit 5).
 - A file whose mode allows group or other access is still used; `auth status` and `doctor` warn about it.
 
 ## Refresh
@@ -89,7 +100,7 @@ Path and permissions are defined in [cli.md](./cli.md): `$XDG_CONFIG_HOME/spmeta
 3. Re-read the token file. If another process refreshed it (the access token changed and `expires_at` is more than 60 s away), release the lock and return it.
 4. `POST https://accounts.spotify.com/api/token` with `grant_type=refresh_token`, `refresh_token`, and `client_id`.
 5. On 200, update `access_token`, `expires_at`, and `scope`; replace `refresh_token` only when the response includes one. Write atomically, release the lock, and return.
-6. On 400 with `error: invalid_grant`, return `KindAuthRequired`: "Spotify rejected the saved login (refresh tokens expire 6 months after login, or access was revoked)." Hint: "run `spmeta auth login`." Other 400 errors are also `KindAuthRequired`. Network errors and 5xx are `KindUnexpected`.
+6. On 400 with `error: invalid_grant`, return `KindAuthRequired`: "Spotify rejected the saved login (refresh tokens expire 6 months after login, or access was revoked)." Hint: "Run `spmeta auth login`." Other 400 errors are also `KindAuthRequired`. Network errors and 5xx are `KindUnexpected`.
 
 Details the steps leave open:
 
@@ -174,5 +185,5 @@ Spotify computes limits over a rolling 30-second window per developer account an
 ## Testing hooks
 
 - `httptest.Server` stands in for both endpoints through `Endpoints`.
-- The browser opener is a `func(url string) error` field, replaced in tests by a function that calls the callback URL directly.
-- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock.
+- The browser opener is the `Open func(url string) error` field of `LoginOptions`, replaced in tests by a function that calls the callback URL directly. The `cli` package exposes it as `WithBrowserOpener`, and the service URLs as `WithAuthEndpoints`.
+- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock. `LoginOptions.Sleep` replaces the 180 s wait for the callback, so a timeout test returns at once.
