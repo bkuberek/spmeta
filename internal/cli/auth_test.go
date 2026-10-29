@@ -49,6 +49,9 @@ type authSetup struct {
 	opened    []string
 	sleep     func(context.Context, time.Duration) error
 	waited    []time.Duration
+	// realDefaultPort leaves the login port at its production default;
+	// otherwise run swaps in a free port so parallel tests do not collide.
+	realDefaultPort bool
 }
 
 func newAuthSetup(t *testing.T) *authSetup {
@@ -104,6 +107,9 @@ func (s *authSetup) run(t *testing.T, args ...string) (code int, stdout, stderr 
 			return nil
 		}),
 	}
+	if !s.realDefaultPort {
+		opts = append(opts, cli.WithDefaultLoginPort(freeLoginPort(t)))
+	}
 	if s.sleep != nil {
 		opts = append(opts, cli.WithSleep(func(ctx context.Context, d time.Duration) error {
 			s.waited = append(s.waited, d)
@@ -114,6 +120,16 @@ func (s *authSetup) run(t *testing.T, args ...string) (code int, stdout, stderr 
 	defer cancel()
 	code = cli.Run(ctx, append([]string{"auth"}, args...), &out, &errOut, cli.BuildInfo{Version: "dev"}, opts...)
 	return code, out.String(), errOut.String()
+}
+
+func freeLoginPort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 // callAuth plays the browser: it follows the redirect URI of authURL with params.
@@ -171,7 +187,8 @@ func TestAuthLoginWithoutClientIDPrintsSetup(t *testing.T) {
 	for _, want := range []string{
 		"no Spotify Client ID",
 		"https://developer.spotify.com/dashboard",
-		"http://127.0.0.1/callback",
+		"http://127.0.0.1:8974/callback",
+		"even if it is the account that owns the app",
 		"spmeta auth login --client-id",
 		"client_id",
 	} {
@@ -212,6 +229,24 @@ func TestAuthLoginClientIDSources(t *testing.T) {
 				t.Errorf("stored token = %v, %v; want the Client ID %s", tok, err, authClientID)
 			}
 		})
+	}
+}
+
+func TestAuthLoginDefaultsToPort8974(t *testing.T) {
+	// Not parallel: it binds the fixed default port.
+	ln, err := net.Listen("tcp4", "127.0.0.1:8974")
+	if err != nil {
+		t.Skipf("port 8974 is not free: %v", err)
+	}
+	_ = ln.Close()
+	s := newAuthSetup(t)
+	s.realDefaultPort = true
+	code, _, stderr := s.run(t, "login", "--client-id", authClientID)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr %q", code, stderr)
+	}
+	if len(s.opened) != 1 || !strings.Contains(s.opened[0], url.QueryEscape("http://127.0.0.1:8974/callback")) {
+		t.Errorf("opened %v, want a redirect_uri of http://127.0.0.1:8974/callback", s.opened)
 	}
 }
 

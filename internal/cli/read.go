@@ -42,6 +42,15 @@ type options struct {
 	// the Spotify services and the system browser.
 	endpoints auth.Endpoints
 	browser   func(url string) error
+	// defaultLoginPort replaces the --port default of auth login; zero keeps
+	// auth.DefaultLoginPort.
+	defaultLoginPort int
+}
+
+// WithDefaultLoginPort replaces the port auth login listens on when --port is
+// absent. Tests use it to avoid colliding on the fixed default.
+func WithDefaultLoginPort(port int) Option {
+	return func(o *options) { o.defaultLoginPort = port }
 }
 
 // WithEnv replaces the process environment, home directory and filesystem

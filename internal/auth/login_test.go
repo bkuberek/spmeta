@@ -262,6 +262,13 @@ func TestLoginUsesRequestedPort(t *testing.T) {
 	}
 }
 
+func TestDefaultLoginPortIsRegistrable(t *testing.T) {
+	t.Parallel()
+	if auth.DefaultLoginPort != 8974 {
+		t.Errorf("DefaultLoginPort = %d, want 8974", auth.DefaultLoginPort)
+	}
+}
+
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -490,8 +497,9 @@ func TestLoginRefusedExchangeHintsAtTheAppSettings(t *testing.T) {
 	r := newLoginRig(t, respond(400, fixture(t, "token-login-refused.json")), approve(t))
 	_, err := r.login(t)
 	be := asBackend(t, err, backend.KindAuthRequired)
-	if !strings.Contains(be.Hint, "http://127.0.0.1/callback") || !strings.Contains(be.Hint, "Client ID") {
-		t.Errorf("hint = %q, want it to name the Client ID and the redirect URI", be.Hint)
+	_, q := authorizeParams(t, r.onlyAuthURL(t))
+	if redirect := q.Get("redirect_uri"); !strings.Contains(be.Hint, redirect) || !strings.Contains(be.Hint, "Client ID") {
+		t.Errorf("hint = %q, want it to name the Client ID and the redirect URI %q actually used", be.Hint, redirect)
 	}
 }
 

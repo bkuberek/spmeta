@@ -25,8 +25,8 @@ Only `api.spotify.com` and `accounts.spotify.com` are contacted, and only in Web
 `auth login` prints these steps when no Client ID is configured, and the README repeats them:
 
 1. Sign in to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) with an account that has Premium, and create an app with the Web API enabled.
-2. Add the redirect URI `http://127.0.0.1/callback`, with no port. Spotify then accepts any port at request time.
-3. In the app's user management, add the Spotify account you listen with (Development Mode allows 5 users).
+2. Add the redirect URI `http://127.0.0.1:8974/callback`. The dashboard rejects a portless loopback URI ("This redirect URI is not secure.", observed 2026-10-29), so spmeta listens on port 8974 by default.
+3. In the app's User Management, add the Spotify account you listen with, even if it is the account that owns the app (Development Mode allows 5 users).
 4. Copy the Client ID and run `spmeta auth login --client-id <id>`, or set `client_id` in `config.toml`.
 
 Each user brings their own Client ID; a shared one would hit the 5-user cap.
@@ -38,7 +38,7 @@ Each user brings their own Client ID; a shared one would hit the 5-user cap.
 1. Generate the code verifier: 48 bytes from `crypto/rand`, encoded with `base64.RawURLEncoding`, which yields exactly 64 characters from `[A-Za-z0-9_-]` (a subset of the allowed set).
 2. Compute the code challenge: `base64.RawURLEncoding(SHA-256(verifier))`.
 3. Generate `state`: 16 bytes from `crypto/rand`, `base64.RawURLEncoding`.
-4. Listen on `127.0.0.1:<port>` (port 0 by default, or `--port`). If the port is in use, return `KindUnexpected`: "port N is in use."
+4. Listen on `127.0.0.1:<port>` (port 8974 by default, or `--port`; `--port 0` picks any free port and works only for an app that registered a portless URI, which the dashboard currently rejects). If the port is in use, return `KindUnexpected`: "port N is in use."
 5. Build the redirect URI `http://127.0.0.1:<actual port>/callback`.
 6. Build the authorization URL `https://accounts.spotify.com/authorize` with query parameters `client_id`, `response_type=code`, `redirect_uri`, `code_challenge_method=S256`, `code_challenge`, `state`, and `scope=user-read-playback-state`.
 7. Print `Open this URL to log in:` and the URL to stderr. Unless `--no-browser`, run `open <url>` on macOS or `xdg-open <url>` on Linux; a failure to open is logged and ignored.
@@ -61,7 +61,7 @@ Details the steps leave open:
 - The listener is IPv4 only (`tcp4` on `127.0.0.1`). A busy port is recognized by `EADDRINUSE`, or `WSAEADDRINUSE` on Windows; any other listen failure is `KindUnexpected`: "could not listen on the loopback interface."
 - The callback server answers in plain text. A request to `/callback` with the right `state` but neither `code` nor `error` gets 400, "Missing authorization code. Return to the terminal.", and is ignored. Methods other than `GET` get 404. Only the first usable callback counts.
 - The `error` value is server-controlled text, so the message shows it only when it is a plain OAuth code (lowercase letters, digits, and underscores); otherwise the message is "Spotify authorization failed."
-- For a 400 from the code exchange, the message is "Spotify refused the login: <error_description>". The description is server text: it is shown only when it is one printable line of at most 200 bytes that does not contain the authorization code; otherwise the `error` code is shown, or nothing. The hint is "Check the Client ID, and that http://127.0.0.1/callback is a redirect URI of your Spotify app."
+- For a 400 from the code exchange, the message is "Spotify refused the login: <error_description>". The description is server text: it is shown only when it is one printable line of at most 200 bytes that does not contain the authorization code; otherwise the `error` code is shown, or nothing. The hint is "Check the Client ID, and that <redirect URI> is a redirect URI of your Spotify app.", where the redirect URI is the one the login used, `http://127.0.0.1:8974/callback` by default.
 - A 200 without a `refresh_token` is `KindUnexpected` ("the Spotify accounts service returned no refresh token."), because a token file without one is not valid.
 - Cancelling the context (Ctrl-C) while waiting is `KindAuthRequired`: "login was cancelled."
 - `auth.OpenBrowser(url)` is the default `Open`: it starts `open` or `xdg-open` without waiting, and returns an error on other platforms, which `Login` logs and ignores.
