@@ -37,7 +37,7 @@
 - **Conventional Commits check**: `amannn/action-semantic-pull-request` validates the pull request title, and a shell step validates each commit subject in the pull request against `^(feat|fix|docs|refactor|test|chore|ci|perf)(\([a-z0-9-]+\))?!?: .+`.
 - **Merge strategy**: "Rebase and merge," so every work-unit commit lands on `main` and appears in the changelog by type.
 - **Targets**: `darwin` and `linux` on `arm64` and `amd64`, `CGO_ENABLED=0`.
-- **Channels**: GitHub Releases (archives and checksums), the Homebrew tap `bkuberek/homebrew-tap` (formula `spmeta`), `.deb` and `.rpm` through goreleaser's nfpm integration, and `go install github.com/bkuberek/spmeta/cmd/spmeta@latest`.
+- **Channels**: GitHub Releases (archives and checksums), the Homebrew tap `bkuberek/homebrew-tap` (cask `spmeta`, installed with `brew install --cask bkuberek/tap/spmeta`), `.deb` and `.rpm` through goreleaser's nfpm integration, and `go install github.com/bkuberek/spmeta/cmd/spmeta@latest`.
 - **License**: MIT (recommendation; the user must confirm before the first release).
 
 Publishing the repository itself is a later human decision. The full procedure is in [release.md](../design/release.md).
@@ -47,8 +47,8 @@ Publishing the repository itself is a later human decision. The full procedure i
 - Commit discipline is enforced by CI; a non-conforming commit blocks the pull request.
 - Release-please opens the release pull request only after a releasable commit (`feat`, `fix`, `perf`, or breaking) lands on `main`.
 - Tags created with the workflow's `GITHUB_TOKEN` do not trigger other workflows, so goreleaser runs as a second job of the release-please workflow instead of on a separate tag-push workflow.
-- goreleaser's `brews` section is reported as deprecated in favor of `homebrew_casks` in recent v2 releases (from memory, unverified). v1 uses a formula; revisit when goreleaser removes `brews` or when macOS signing and notarization are set up.
-- macOS binaries are not signed or notarized in v1. Homebrew and `go install` installs are not quarantined; a downloaded archive needs `xattr -d com.apple.quarantine`.
+- goreleaser's `brews` (formula) section is deprecated in favor of `homebrew_casks` (soft since v2.10, hard since v2.16, per [goreleaser deprecations](https://goreleaser.com/deprecations/)), so v1 publishes a cask. Homebrew supports casks with Linux binaries since 4.5.0 ("preliminary"), and the generated cask has Linux builds; the `.deb`, `.rpm`, and archive channels do not depend on that. Because the binaries are not signed, the cask removes the quarantine flag in a post-install hook, which goreleaser documents as a security bypass; revisit when macOS signing and notarization are set up. (Updated 2026-10-29; this replaces the earlier plan to keep `brews`.)
+- macOS binaries are not signed or notarized in v1. Homebrew installs (through the hook) and `go install` installs are not quarantined; a downloaded archive needs `xattr -d com.apple.quarantine`.
 
 ## Alternatives considered
 
