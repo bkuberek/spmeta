@@ -18,7 +18,7 @@ spmeta help [COMMAND]
 
 Parsing uses the Go `flag` package ([ADR 0006](../decisions/0006-dependencies.md)): `-flag` and `--flag` are equivalent, values are given as `--flag value` or `--flag=value`, flags must precede any positional argument, and the only short flag is `-h`. The first argument selects a subcommand when it is `auth`, `doctor`, `version`, or `help`; otherwise all arguments belong to the root read command, which accepts no positional arguments.
 
-The `auth` subcommands exist from task T12 and `--source web` from task T13 onward ([ADR 0004](../decisions/0004-web-api-built-last.md)). In a build without Web, `--source web` exits 4 with "Web mode is not available in this version."
+Web mode ([ADR 0004](../decisions/0004-web-api-built-last.md)) is on only while a token file exists, which `spmeta auth login` creates. Without one, `auto` skips Web without a request, and `--source web` exits 4 with "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`."
 
 ## Root command: read the current item
 
@@ -135,7 +135,7 @@ Every non-zero exit prints one `spmeta: <message>` line on stderr, optionally fo
 
 With `--source auto`, when no source returns an item, the exit code comes from the highest-precedence error: 6, then 5, then 7, then 1, then 3, then 4 ([ADR 0005](../decisions/0005-auto-source-resolution.md)).
 
-In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running. The one exception is a source that can never become available during the run, such as `--source web` in a build without Web: watch mode exits 4 at once instead of polling.
+In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running. The one exception is a source that can never become available during the run, such as `--source web` without a token file: watch mode exits 4 at once instead of polling.
 
 ## Subcommands
 
@@ -207,6 +207,13 @@ macos   ok: Spotify is running; Automation permission granted
 web     not configured: run 'spmeta auth login' to see playback on other devices (optional)
 ```
 
+With a token file, the `web` line reports the one request and adds detail lines:
+
+```text
+web     ok: logged in; the Spotify Web API answered
+        refresh token expires about 2027-04-27
+```
+
 Each line starts with the check name, padded to 8 columns, and one of `ok`, `unavailable`, `not configured`, `denied`, or `error`, followed by a colon, the reason and, where useful, the next step. The `config` line follows the same rule. A check may add detail lines indented by 8 spaces under its line: `config` lists each unknown key, and `mpris` lists each player. Checks per platform:
 
 | Check | What it does |
@@ -215,11 +222,11 @@ Each line starts with the check name, padded to 8 columns, and one of `ok`, `una
 | `macos` (macOS) | Runs the process check. If Spotify is running, sends a minimal Apple event with a 120 s timeout and prints "macOS may ask to allow <terminal> to control Spotify; click OK." to stderr before sending. `<terminal>` comes from `TERM_PROGRAM` (`Apple_Terminal` as Terminal, a trailing `.app` dropped), or reads "the app that runs spmeta" when it is unset. Reports `ok` when granted, `denied` (with the System Settings path), or `error` when no answer arrives or the check fails. If Spotify is not running, reports `unavailable` because permission cannot be checked without launching it, and does not launch it |
 | `mpris` (Linux) | Resolves the session bus address, lists MPRIS players one per detail line, marks the one `spmeta` would select (the `player` setting, else the usual preference order), and shows `no answer` for a player whose `GetAll` failed. `ok` needs a selected player; no bus, no players, or no Spotify client is `unavailable` |
 | `local` (other platforms) | Reports `unavailable`: this platform is not supported |
-| `web` | Reports the Client ID source, token file presence and mode, access-token expiry, and estimated refresh-token expiry; if a token file exists, performs one `GET /v1/me/player` and reports the outcome. In a build without Web it reports `unavailable: Web mode is not available in this version` and makes no request |
+| `web` | Without a token file, reports `not configured` and makes no request. With one, performs one `GET /v1/me/player` (a rate limit is not waited out) and reports `ok` when Spotify answered, including "no device is active" (204); `denied` for a 403; `unavailable` when the token file disappears meanwhile; and `error` for anything else (login rejected or expired, network failure, server error, rate limit), with the message and hint. Detail lines give the estimated refresh-token expiry and, when the token file mode allows group or other access, the `chmod 600` command. The item itself is never printed |
 
-The report goes to stdout, one line per check as soon as the check finishes, so a long wait on the Automation prompt shows what was checked before it. `doctor` never reads the current track and never launches Spotify.
+The report goes to stdout, one line per check as soon as the check finishes, so a long wait on the Automation prompt shows what was checked before it. `doctor` never prints the current track and never launches Spotify.
 
-`doctor` exits 0 when at least one source is usable and 4 otherwise. A source is usable when it is reachable: macOS permission granted, or an MPRIS player selected. Web alone counts once it exists (T14). On exit 4 it prints `spmeta: no source is available` and a `hint:` line on stderr after the report.
+`doctor` exits 0 when at least one source is usable and 4 otherwise. A source is usable when it is reachable: macOS permission granted, or an MPRIS player selected. A working Web login alone counts: a 204 with no active device is an answer, a rejected login or a 403 is not. On exit 4 it prints `spmeta: no source is available` and a `hint:` line on stderr after the report.
 
 ### version
 

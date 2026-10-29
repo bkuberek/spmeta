@@ -100,7 +100,7 @@ func TestRunHelpUnknownTopic(t *testing.T) {
 	}
 }
 
-func TestRunRootWebWithoutBackend(t *testing.T) {
+func TestRunRootWebWithoutLogin(t *testing.T) {
 	code, stdout, stderr := run(t, "--source", "web")
 	if code != 4 {
 		t.Fatalf("exit = %d, want 4", code)
@@ -108,7 +108,7 @@ func TestRunRootWebWithoutBackend(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	if want := "spmeta: Web mode is not available in this version\n"; stderr != want {
-		t.Errorf("stderr = %q, want %q", stderr, want)
+	if stderr != notLoggedIn {
+		t.Errorf("stderr = %q, want %q", stderr, notLoggedIn)
 	}
 }

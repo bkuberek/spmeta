@@ -100,7 +100,7 @@ func runWatch(t *testing.T, s watchSetup, args ...string) watchRun {
 
 // A source that can never become available in this run is a configuration
 // error: watch mode must exit at once instead of polling silently forever.
-func TestWatchWebWithoutBackendExitsImmediately(t *testing.T) {
+func TestWatchWebWithoutLoginExitsImmediately(t *testing.T) {
 	r := runWatch(t, watchSetup{}, "--watch", "--source", "web")
 	if r.code != 4 {
 		t.Errorf("exit = %d, want 4", r.code)
@@ -108,8 +108,8 @@ func TestWatchWebWithoutBackendExitsImmediately(t *testing.T) {
 	if r.stdout != "" {
 		t.Errorf("stdout = %q, want nothing", r.stdout)
 	}
-	if !strings.Contains(r.stderr, "Web mode is not available in this version") {
-		t.Errorf("stderr = %q, want the Web-unavailable message", r.stderr)
+	if r.stderr != notLoggedIn {
+		t.Errorf("stderr = %q, want %q", r.stderr, notLoggedIn)
 	}
 	if len(r.sleeps) != 0 {
 		t.Errorf("slept %v, want no polling", r.sleeps)

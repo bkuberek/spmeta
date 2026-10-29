@@ -9,16 +9,19 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/backend/macos"
 	"github.com/bkuberek/spmeta/internal/backend/mpris"
+	"github.com/bkuberek/spmeta/internal/model"
 )
 
 // Status words that start each source line.
 const (
 	statusOK          = "ok"
 	statusUnavailable = "unavailable"
+	statusNotConfig   = "not configured"
 	statusDenied      = "denied"
 	statusError       = "error"
 )
@@ -29,6 +32,7 @@ const (
 	hintAgain          = "run 'spmeta doctor' again"
 	unknownTerminal    = "the app that runs spmeta"
 	permissionWait     = "120 s" // macos.CheckPermission waits this long for the consent prompt
+	dateLayout         = "2006-01-02"
 )
 
 // MacOSChecker is the part of the macOS backend doctor uses.
@@ -39,6 +43,21 @@ type MacOSChecker interface {
 // PlayerLister is the part of the MPRIS backend doctor uses.
 type PlayerLister interface {
 	Players(ctx context.Context) ([]mpris.PlayerInfo, error)
+}
+
+// WebReader is the part of the Web backend doctor uses. Doctor discards the
+// item: it only needs to know whether the request worked.
+type WebReader interface {
+	Read(ctx context.Context) (model.NowPlaying, error)
+}
+
+// WebReport describes the Web setup. The caller fills it in from the token
+// file, which doctor does not read.
+type WebReport struct {
+	Reader         WebReader // nil when there is no token file: Web is not configured
+	TokenPath      string
+	RefreshExpires time.Time // estimated end of the saved login; zero when unknown
+	WideMode       bool      // the token file allows group or other access
 }
 
 // ConfigReport describes how the configuration was resolved. The caller fills
@@ -57,7 +76,8 @@ type Options struct {
 	Config   ConfigReport
 	MacOS    MacOSChecker // nil when the platform has no macOS backend
 	MPRIS    PlayerLister // nil when the platform has no MPRIS backend
-	Terminal string       // TERM_PROGRAM, to name the app macOS asks about
+	Web      WebReport
+	Terminal string // TERM_PROGRAM, to name the app macOS asks about
 
 	Out    io.Writer    // the report
 	Notice io.Writer    // progress notes shown while a check waits
@@ -65,8 +85,9 @@ type Options struct {
 }
 
 // Run writes the report and returns nil when at least one source is usable,
-// else a KindNotAvailable error for the caller to print. It never reads the
-// current track and never launches Spotify.
+// else a KindNotAvailable error for the caller to print. It never prints the
+// current track and never launches Spotify. With a token file it makes one Web
+// request.
 func Run(ctx context.Context, o Options) error {
 	r := &reporter{o: o, log: o.Log}
 	if r.log == nil {
@@ -89,8 +110,7 @@ func Run(ctx context.Context, o Options) error {
 	if o.MacOS == nil && o.MPRIS == nil {
 		r.line("local", statusUnavailable, "this platform is not supported; spmeta reads Spotify on macOS and Linux")
 	}
-	// Web is not built yet, so it can never make a source usable.
-	r.line("web", statusUnavailable, "Web mode is not available in this version")
+	usable = r.web(ctx) || usable
 
 	if usable {
 		return nil
@@ -209,6 +229,38 @@ func (r *reporter) mpris(ctx context.Context) bool {
 		r.continuation(playerLine(p))
 	}
 	return selected != ""
+}
+
+func (r *reporter) web(ctx context.Context) bool {
+	w := r.o.Web
+	if w.Reader == nil {
+		r.line("web", statusNotConfig, "run 'spmeta auth login' to see playback on other devices (optional)")
+		return false
+	}
+	// Reaching Spotify is what counts: "no active device" is an answer.
+	_, err := w.Reader.Read(ctx)
+	usable := false
+	switch {
+	case err == nil:
+		r.line("web", statusOK, "logged in; the Spotify Web API answered")
+		usable = true
+	case backend.KindOf(err) == backend.KindNothingPlaying:
+		r.line("web", statusOK, "logged in; the Spotify Web API answered, but no device is active")
+		usable = true
+	case backend.KindOf(err) == backend.KindPermissionDenied:
+		r.line("web", statusDenied, describe(err), err)
+	case backend.KindOf(err) == backend.KindNotAvailable:
+		r.line("web", statusUnavailable, describe(err), err)
+	default:
+		r.line("web", statusError, describe(err), err)
+	}
+	if !w.RefreshExpires.IsZero() {
+		r.continuation("refresh token expires about " + w.RefreshExpires.UTC().Format(dateLayout))
+	}
+	if w.WideMode {
+		r.continuation(fmt.Sprintf("other users can access the token file. Run: chmod 600 '%s'", w.TokenPath))
+	}
+	return usable
 }
 
 func playerLine(p mpris.PlayerInfo) string {

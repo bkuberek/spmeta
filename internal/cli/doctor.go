@@ -53,6 +53,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, inf
 	// The local backend doubles as the diagnostic hook: the macOS and MPRIS
 	// backends implement the doctor interfaces, other platforms implement none.
 	b := newLocal(local.Settings{Player: settings.Player})
+	log := debugLogger(*debug, stderr)
 	o := doctor.Options{
 		Version:  info.Version,
 		OS:       runtime.GOOS,
@@ -61,7 +62,8 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, inf
 		Terminal: getenv(opts.env, "TERM_PROGRAM"),
 		Out:      stdout,
 		Notice:   stderr,
-		Log:      debugLogger(*debug, stderr),
+		Log:      log,
+		Web:      webReport(settings, opts, info, log),
 	}
 	o.MacOS, _ = b.(doctor.MacOSChecker)
 	o.MPRIS, _ = b.(doctor.PlayerLister)

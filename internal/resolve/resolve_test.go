@@ -192,8 +192,9 @@ func TestWebMode(t *testing.T) {
 		if backend.KindOf(err) != backend.KindNotAvailable {
 			t.Fatalf("kind = %d, want NotAvailable (err %v)", backend.KindOf(err), err)
 		}
-		if !strings.Contains(err.Error(), "Web mode is not available in this version") {
-			t.Errorf("message = %q", err)
+		var be *backend.Error
+		if !errors.As(err, &be) || be.Message != "not logged in to the Spotify Web API" || be.Hint != "Run `spmeta auth login`." {
+			t.Errorf("error = %+v, want the not-logged-in message and hint", be)
 		}
 		if l.calls != 0 {
 			t.Errorf("local calls = %d, want 0", l.calls)

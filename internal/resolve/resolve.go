@@ -19,24 +19,28 @@ const (
 	ModeWeb   Mode = "web"
 )
 
-// webUnavailable is the message for --source web in a build without Web.
-const webUnavailable = "Web mode is not available in this version"
+// Message and hint for --source web without a login. They match `spmeta auth
+// status`, which reports the same condition.
+const (
+	msgNotLoggedIn = "not logged in to the Spotify Web API"
+	hintLogin      = "Run `spmeta auth login`."
+)
 
 // Resolver reads the current item from the sources its Mode allows.
 type Resolver struct {
 	Mode  Mode
 	Local backend.Backend // never nil
-	Web   backend.Backend // nil when Web is not configured or not built
+	Web   backend.Backend // nil when there is no saved login
 	// Logger receives one debug line per source read. Nil discards them.
 	Logger *slog.Logger
 }
 
 // Static reports an error that every Read would return for the whole run,
-// such as --source web in a build without Web, so a caller can fail fast
+// such as --source web without a saved login, so a caller can fail fast
 // instead of polling. It returns nil when reads may succeed.
 func (r *Resolver) Static() error {
 	if r.Mode == ModeWeb && r.Web == nil {
-		return &backend.Error{Kind: backend.KindNotAvailable, Source: model.SourceWeb, Message: webUnavailable}
+		return &backend.Error{Kind: backend.KindNotAvailable, Source: model.SourceWeb, Message: msgNotLoggedIn, Hint: hintLogin}
 	}
 	return nil
 }

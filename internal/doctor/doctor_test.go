@@ -7,16 +7,18 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/backend/macos"
 	"github.com/bkuberek/spmeta/internal/backend/mpris"
 	"github.com/bkuberek/spmeta/internal/doctor"
+	"github.com/bkuberek/spmeta/internal/model"
 )
 
 const (
 	headerLine = "spmeta 0.1.0 (darwin/arm64)"
-	webLine    = "web     unavailable: Web mode is not available in this version"
+	webLine    = "web     not configured: run 'spmeta auth login' to see playback on other devices (optional)"
 )
 
 // fakeMacOS answers CheckPermission with a canned result. prompts says whether
@@ -33,6 +35,17 @@ func (f *fakeMacOS) CheckPermission(_ context.Context, beforePrompt func()) maco
 		beforePrompt()
 	}
 	return f.result
+}
+
+// fakeWeb answers Read with a canned error and counts the requests.
+type fakeWeb struct {
+	err   error
+	calls int
+}
+
+func (f *fakeWeb) Read(context.Context) (model.NowPlaying, error) {
+	f.calls++
+	return model.NowPlaying{}, f.err
 }
 
 type fakePlayers struct {
@@ -319,9 +332,122 @@ func TestRunExitMapsToNoSource(t *testing.T) {
 	assertNoSource(t, err)
 }
 
-func TestRunWebNeverMakesASourceUsable(t *testing.T) {
+func TestRunWebNotConfiguredIsNotASource(t *testing.T) {
 	_, err := report(t, doctor.Options{MPRIS: fakePlayers{}})
 	assertNoSource(t, err)
+}
+
+func TestRunWeb(t *testing.T) {
+	const tokenPath = "/home/u/.config/spmeta/token.json"
+	expires := time.Date(2027, 4, 29, 9, 0, 0, 0, time.UTC)
+	login := func(err error) doctor.WebReport {
+		return doctor.WebReport{Reader: &fakeWeb{err: err}, TokenPath: tokenPath, RefreshExpires: expires}
+	}
+	const expiry = "        refresh token expires about 2027-04-29"
+	tests := []struct {
+		name   string
+		web    doctor.WebReport
+		want   []string
+		usable bool
+	}{
+		{
+			"read succeeds",
+			login(nil),
+			[]string{"web     ok: logged in; the Spotify Web API answered", expiry},
+			true,
+		},
+		{
+			"no active device still reached Spotify",
+			login(&backend.Error{Kind: backend.KindNothingPlaying, Message: "nothing is playing"}),
+			[]string{"web     ok: logged in; the Spotify Web API answered, but no device is active", expiry},
+			true,
+		},
+		{
+			"login expired",
+			login(&backend.Error{Kind: backend.KindAuthRequired, Message: "Spotify rejected the saved login.", Hint: "Run `spmeta auth login`."}),
+			[]string{"web     error: Spotify rejected the saved login. Run `spmeta auth login`.", expiry},
+			false,
+		},
+		{
+			"forbidden",
+			login(&backend.Error{Kind: backend.KindPermissionDenied, Message: "Spotify refused access (403).", Hint: "Check the allowlist."}),
+			[]string{"web     denied: Spotify refused access (403). Check the allowlist.", expiry},
+			false,
+		},
+		{
+			"token file vanished",
+			login(&backend.Error{Kind: backend.KindNotAvailable, Message: "not logged in to the Spotify Web API", Hint: "Run `spmeta auth login`."}),
+			[]string{"web     unavailable: not logged in to the Spotify Web API. Run `spmeta auth login`.", expiry},
+			false,
+		},
+		{
+			"network failure",
+			login(&backend.Error{Kind: backend.KindUnexpected, Message: "could not reach the Spotify Web API."}),
+			[]string{"web     error: could not reach the Spotify Web API", expiry},
+			false,
+		},
+		{
+			"unparsable token file has no expiry",
+			doctor.WebReport{Reader: &fakeWeb{}, TokenPath: tokenPath},
+			[]string{"web     ok: logged in; the Spotify Web API answered"},
+			true,
+		},
+		{
+			"token file readable by others",
+			doctor.WebReport{Reader: &fakeWeb{}, TokenPath: tokenPath, RefreshExpires: expires, WideMode: true},
+			[]string{
+				"web     ok: logged in; the Spotify Web API answered", expiry,
+				"        other users can access the token file. Run: chmod 600 '" + tokenPath + "'",
+			},
+			true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lines, err := report(t, doctor.Options{Web: tc.web})
+			i := indexOfPrefix(lines, "web ")
+			if i < 0 || !equalLines(lines[i:], tc.want) {
+				t.Errorf("web report:\n%s\nwant:\n%s", strings.Join(lines[max(i, 0):], "\n"), strings.Join(tc.want, "\n"))
+			}
+			if usable := err == nil; usable != tc.usable {
+				t.Errorf("usable = %v, want %v (err %v)", usable, tc.usable, err)
+			}
+			if got := tc.web.Reader.(*fakeWeb).calls; got != 1 {
+				t.Errorf("web requests = %d, want exactly 1", got)
+			}
+		})
+	}
+}
+
+func TestRunWebAloneIsEnoughWhenLocalFails(t *testing.T) {
+	denied := &fakeMacOS{result: macos.PermissionResult{State: macos.PermissionDenied}}
+	lines, err := report(t, doctor.Options{MacOS: denied, Web: doctor.WebReport{Reader: &fakeWeb{}}})
+	if err != nil {
+		t.Errorf("err = %v, want nil: a working Web login is a usable source", err)
+	}
+	if indexOfPrefix(lines, "web     ok:") < 0 {
+		t.Errorf("report lacks the web ok line:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+func TestRunWebNotConfiguredMakesNoRequest(t *testing.T) {
+	lines, _ := report(t, doctor.Options{MPRIS: fakePlayers{}})
+	if got := lines[len(lines)-1]; got != webLine {
+		t.Errorf("last line = %q, want %q", got, webLine)
+	}
+}
+
+func TestRunWebDebugLogsTheCause(t *testing.T) {
+	var logs bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cause := &backend.Error{Kind: backend.KindUnexpected, Message: "could not reach the Spotify Web API.", Err: errors.New("dial tcp: refused")}
+	lines, _ := report(t, doctor.Options{Web: doctor.WebReport{Reader: &fakeWeb{err: cause}}, Log: log})
+	if !strings.Contains(logs.String(), "web") || !strings.Contains(logs.String(), "could not reach") {
+		t.Errorf("debug log = %q, want the web check and its cause", logs.String())
+	}
+	if strings.Contains(strings.Join(lines, "\n"), "dial tcp") {
+		t.Errorf("the cause leaked into the report:\n%s", strings.Join(lines, "\n"))
+	}
 }
 
 func TestRunDebugLogsTheCause(t *testing.T) {
@@ -357,6 +483,8 @@ func assertNoSource(t *testing.T, err error) {
 		t.Errorf("error = %+v, want message %q and a hint", be, "no source is available")
 	}
 }
+
+func equalLines(a, b []string) bool { return strings.Join(a, "\n") == strings.Join(b, "\n") }
 
 func contains(lines []string, want string) bool { return indexOf(lines, want) >= 0 }
 

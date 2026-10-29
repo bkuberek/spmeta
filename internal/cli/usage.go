@@ -74,6 +74,7 @@ Flags:
   -h, --help         Print this help
 
 On macOS it may wait up to 120 s while you answer the Automation prompt.
+With a Web login (spmeta auth login) it makes one request to the Spotify Web API.
 Exit status: 0 when at least one source is usable, 4 when none is.
 `
 

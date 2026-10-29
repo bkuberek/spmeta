@@ -112,7 +112,8 @@ Beyond the fixtures above, these cases must exist:
 - Login: state mismatch ignored, `error=access_denied` returns exit 5, timeout returns exit 5, redirect URI byte-identical between authorize and exchange.
 - Resolver: every row of the ADR 0005 table, including local paused with Web playing, local unavailable with Web paused, and each pair of errors for precedence.
 - Watch: first emission, no emission on position change, emission on track change, state change, device change, and transition to nothing; rate-limit sleep; fatal 5 and 6; context cancellation returns nil.
-- `--debug` secrecy: a full fake login, refresh, and read with `--debug`; no token, code, or verifier appears in stderr.
+- `--debug` secrecy: a full fake login, reads, refresh, 401 and refused refresh, and `doctor` with `--debug`; no token, code, or verifier appears in stdout or stderr.
+- Web wiring through `cli.Run` with fake endpoints: local paused plus Web playing returns Web; no token file means zero requests (also with `--source web`, which exits 4); exit code per Web error against an unavailable local source; a one-shot read waits out a `Retry-After` of 10 s but not 11 s; watch mode leaves the wait to the loop and throttles Web to `web_interval` in `auto`; `doctor` makes at most one Web request.
 - Exit code for every `Kind` through `cli.Run`.
 
 ## CI
@@ -162,6 +163,8 @@ These scenarios need real Spotify clients. Each row is run before the release th
 | Hung app: `kill -STOP` the Spotify process, expect exit 1 within about 2 s, then `kill -CONT` | Required | Required | n/a | n/a |
 | `Position` reported while playing (open question) | n/a | Required (probe) | Required | n/a |
 | Playing on a phone only | n/a | n/a | n/a | Required |
+| No token file: `spmeta` makes no Web request; `--source web` exits 4 with the not-logged-in hint | n/a | n/a | n/a | Required |
+| `spmeta doctor`: `web` line is `not configured` before login, `ok` after, `error` with a corrupted token file | n/a | n/a | n/a | Required |
 | `--watch` prints one line per track change and nothing between | Required | Required | Required | Required |
 | Access revoked in account settings: exit 5 with login hint | n/a | n/a | n/a | Required |
 | Account not on the allowlist: exit 6 with both causes in the hint | n/a | n/a | n/a | Required |

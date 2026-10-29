@@ -26,7 +26,7 @@ The plan supports a local-only release cut after step 6: the release task depend
 
 ## Consequences
 
-- Until the Web backend exists, `--source auto` means local only, and `--source web` exits 4 with "Web mode is not available in this version."
+- Until the Web backend exists, `--source auto` means local only, and `--source web` exits 4 with "Web mode is not available in this version." (Superseded in v0.2.0: Web is on while a token file exists, and `--source web` without one exits 4 with "not logged in to the Spotify Web API"; see [cli.md](../design/cli.md).)
 - If the local-only cut is released, it ships as v0.1.0 and Web mode ships in the next minor version.
 - The resolver is designed with the Web step from the start ([ADR 0005](./0005-auto-source-resolution.md)), so adding Web does not change local behavior.
 

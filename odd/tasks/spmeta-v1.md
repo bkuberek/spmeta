@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T13 done on feat/web-mode; T14 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T14 done on feat/web-mode; Web PR next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -225,7 +225,8 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
   - First-run consent: the user saw and approved the macOS Automation prompt during the first live probe (2026-10-27). Doctor's own wait on the prompt was not exercised, because permission was already granted.
   - Deferred by the user (2026-10-28): SketchyBar or launchd as the responsible process (they have no status-bar plugin yet).
   - Paused (2026-10-29, Homebrew-installed v0.1.0): `spmeta` printed `⏸ Send the Pain Below — Chevelle · … (0:46 / 4:12)` and exited 0.
-  - Pending rows: nothing loaded; podcast episode; ad; local file; Spotify Connect; Spotify quit; Automation denied; Linux desktop players.
+  - Spotify Connect (2026-10-29, during the T14 live checks, with no Web login): while the phone played, the Mac app mirrored it. The local read printed the phone's track as playing, with exit 0. The local duration showed 4:44, while Web reported 4:46 (286386 ms) for the same track.
+  - Pending rows: nothing loaded; podcast episode; ad; local file; Spotify quit; Automation denied; Linux desktop players.
   - Follow-ups: `debugLogger` in `internal/cli/doctor.go` duplicates the slog setup in `read.go`. The "120 s" text in the doctor output mirrors `macos.permissionTimeout`. T14 replaces the static `web` line in `internal/doctor/doctor.go`.
   - Actual: about 1,520 lines (about 450 non-test Go, 190 README, 24 cli.md) against a 400 forecast.
 - Goal: `spmeta doctor` for local sources and the user-facing README.
@@ -345,7 +346,29 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T14 Web integration
 
-- [ ] T14 complete
+- [x] T14 complete (branch `feat/web-mode`)
+- Evidence (2026-10-29):
+  - RED: `internal/doctor` failed to build (`undefined: doctor.WebReport`), and `internal/resolve` failed on the new message. Before `internal/cli/web.go` existed, 26 CLI tests and subtests failed. The secrecy test's RED is a mutation: logging the access token under `--debug` makes it fail.
+  - GREEN: `go test -race -count=1 ./...` passes (14 packages), as does `-count=5` on cli and doctor. `go vet` (darwin and linux) is clean, `golangci-lint` reports 0 issues, and the linux and windows builds compile. The parent re-ran tests and lint.
+  - Mutations, each caught: a 10 s wait in watch, no throttle, no wait in one-shot reads, a dropped `Version`, and building Web without a token file.
+  - Wiring:
+    - Web is built only while a token file exists.
+    - `MaxRetryWait` is 10 s for one-shot reads and 0 in watch, and auto watch throttles Web by `web_interval`.
+    - The User-Agent carries the version.
+    - `--debug` logs both Client IDs when they differ, never a token.
+    - `--source web` without a login exits 4 with "not logged in to the Spotify Web API" and the hint.
+    - doctor makes one real Web check (ok, denied, error, or not configured) and shows the refresh-expiry detail.
+  - Docs: README Web section; cli.md, architecture.md, backend-web.md and testing.md; ADR 0004 gains a "superseded in v0.2.0" note (parent edit).
+  - Live checks on this Mac with the real login, phone playing and Mac Spotify mirroring:
+    - `--source web --format json` gives `source: web` with device `BKS25`/`Smartphone`, exit 0.
+    - `spmeta` exits 0.
+    - `doctor` prints `web ok: logged in; the Spotify Web API answered` and the refresh expiry about 2027-04-29, exit 0.
+    - `doctor --debug` shows 4 debug lines and no token text.
+    - No token file (temp `XDG_CONFIG_HOME`): `--source web` exits 4 with the hint, doctor shows `web not configured`, and auto exits 0 local-only.
+    - Corrupt token file: exit 5, and doctor shows `web error`.
+    - `--watch --source web` prints 1 line in 6 s, and SIGINT gives exit 0.
+  - Not run: revoked access (exit 5) and account not on the allowlist (exit 6); both need dashboard changes.
+  - Open: doctor reports `web not configured` when the config is invalid (the config line shows the error). The position of `QUOTA_EXCEEDED` in a real 429 body is unconfirmed.
 - Goal: Web in `auto`, `--source web`, watch and `doctor`; end-to-end secrecy test; README Web setup.
 - Files: `internal/cli/read.go` (construct Web when a token file exists; `MaxRetryWait` 10 s one-shot, 0 in watch; `resolve.Throttle` with `web_interval`), `internal/doctor/doctor.go` (Web check), `internal/cli/secrecy_test.go`, `README.md` (Spotify Developer Dashboard setup, 6-month re-login).
 - Test-first: RED `cli.Run` tests with fake Web endpoints: local paused plus Web playing returns Web; no token file means Web is not called; `--debug` login, refresh and read output contains no secret values.
@@ -447,4 +470,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-T14 (Web integration) on `feat/web-mode`, then a single PR for T11–T14 and the v0.2.0 release PR. The T10 manual-matrix rows are still pending with the user.
+Open the single PR for T11–T14 from `feat/web-mode`, merge it, then merge the v0.2.0 release PR. The T10 manual-matrix rows are still pending with the user.

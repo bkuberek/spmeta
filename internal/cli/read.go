@@ -38,8 +38,9 @@ type options struct {
 	env      config.Env
 	sleep    func(context.Context, time.Duration) error
 	now      func() time.Time
-	// endpoints and browser are for the auth commands; zero values select
-	// the Spotify services and the system browser.
+	// endpoints is where the Web backend and the auth commands go, and browser
+	// is how auth login opens its URL; zero values select the Spotify services
+	// and the system browser.
 	endpoints auth.Endpoints
 	browser   func(url string) error
 	// defaultLoginPort replaces the --port default of auth login; zero keeps
@@ -72,14 +73,14 @@ func WithBackend(b backend.Backend) Option {
 	return WithLocalFactory(func(local.Settings) backend.Backend { return b })
 }
 
-// WithWebBackend sets the Web backend. Production builds have none, so
-// --source web reports that Web mode is not available.
+// WithWebBackend sets the Web backend, in place of the one built over the
+// token file. Tests use it to avoid the Web API altogether.
 func WithWebBackend(b backend.Backend) Option {
 	return func(o *options) { o.web = b }
 }
 
-// WithAuthEndpoints replaces the Spotify service URLs the auth commands
-// contact, so that tests can use httptest servers.
+// WithAuthEndpoints replaces the Spotify service URLs that Web reads and the
+// auth commands contact, so that tests can use httptest servers.
 func WithAuthEndpoints(e auth.Endpoints) Option {
 	return func(o *options) { o.endpoints = e }
 }
@@ -186,7 +187,7 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	resolver := &resolve.Resolver{
 		Mode:   resolve.Mode(settings.Source),
 		Local:  newLocal(local.Settings{Player: settings.Player}),
-		Web:    webBackend(settings, opts),
+		Web:    webBackend(settings, opts, info, log),
 		Logger: log,
 	}
 	if settings.Watch {
