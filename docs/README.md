@@ -46,7 +46,7 @@ Dated October 27, 2026. Each note separates verified findings, live observations
 
 ## Decisions
 
-The [decision index](./decisions/README.md) lists all ADRs and their status. ADRs 0001 to 0008 are Accepted.
+The [decision index](./decisions/README.md) lists all ADRs and their status. ADRs 0001 to 0008 are Accepted; ADR 0009 (Windows support) is Proposed and not scheduled.
 
 ## Design
 
