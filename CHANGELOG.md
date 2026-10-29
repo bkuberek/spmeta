@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/bkuberek/spmeta/compare/v0.1.0...v0.2.0) (2026-10-29)
+
+
+### Features
+
+* **auth:** add loopback login and the spmeta auth commands ([8f1e174](https://github.com/bkuberek/spmeta/commit/8f1e174a506164361915bb147070c0e7198be481))
+* **auth:** add PKCE, token file and locked refresh for Web mode ([188a15b](https://github.com/bkuberek/spmeta/commit/188a15b54e7a398b47bc1c407250a4ec19cb4605))
+* **auth:** default the login redirect to port 8974 ([9046a7d](https://github.com/bkuberek/spmeta/commit/9046a7d023a34316f98c425c30647a11abd5f7c2))
+* **web:** read playback state from the Spotify Web API ([bea50fb](https://github.com/bkuberek/spmeta/commit/bea50fbbb925bea0ec903c958bb35128901d0ee7))
+* **web:** use the Web API in auto, --source web, watch and doctor ([292bfc5](https://github.com/bkuberek/spmeta/commit/292bfc52177e7b13d37240a8e5808ee0843341eb))
+
 ## 0.1.0 (2026-10-29)
 
 
