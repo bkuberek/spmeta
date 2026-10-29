@@ -1,0 +1,38 @@
+{
+  "device": {
+    "id": "f2b3c4d5e6f708192a3b4c5d6e7f80910a1b2c3d",
+    "is_active": true,
+    "is_private_session": true,
+    "is_restricted": false,
+    "name": "Pixel 9",
+    "type": "Smartphone",
+    "volume_percent": null
+  },
+  "timestamp": 1761586800000,
+  "progress_ms": 1000,
+  "is_playing": true,
+  "item": {
+    "album": {
+      "album_type": "album",
+      "id": "0NoIsrcAlbumId0000001",
+      "images": [
+        {"url": "https://i.scdn.co/image/ab67616d0000b2730000000000000000000000cc", "height": 640, "width": 640}
+      ],
+      "name": "Home",
+      "type": "album",
+      "uri": "spotify:album:0NoIsrcAlbumId0000001",
+      "artists": [{"name": "Alvan", "type": "artist"}]
+    },
+    "artists": [{"name": "Alvan", "type": "artist"}],
+    "disc_number": 1,
+    "duration_ms": 238341,
+    "explicit": false,
+    "id": "4brK3gpPjXArNUlU1hBXTe",
+    "is_local": false,
+    "name": "Amazone",
+    "track_number": 4,
+    "type": "track",
+    "uri": "spotify:track:4brK3gpPjXArNUlU1hBXTe"
+  },
+  "currently_playing_type": "track"
+}

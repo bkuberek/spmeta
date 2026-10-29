@@ -1,0 +1,41 @@
+{
+  "device": {
+    "id": "d0f1a2b3c4d5e6f708192a3b4c5d6e7f80910a1b",
+    "is_active": true,
+    "is_private_session": false,
+    "is_restricted": false,
+    "name": "Living Room",
+    "type": "Speaker",
+    "volume_percent": 55
+  },
+  "timestamp": 1761586800000,
+  "progress_ms": 60000,
+  "is_playing": true,
+  "item": {
+    "album": {
+      "album_type": "single",
+      "id": "0SingleAlbumId00000001",
+      "images": [
+        {"url": "https://i.scdn.co/image/ab67616d0000b2730000000000000000000000aa", "height": null, "width": null},
+        {"url": "https://i.scdn.co/image/ab67616d00001e020000000000000000000000bb", "height": null, "width": null}
+      ],
+      "name": "Single",
+      "type": "album",
+      "uri": "spotify:album:0SingleAlbumId00000001",
+      "artists": [{"name": "Alvan", "type": "artist"}]
+    },
+    "artists": [{"name": "Alvan", "type": "artist"}],
+    "disc_number": 1,
+    "duration_ms": 200000,
+    "explicit": false,
+    "external_ids": {"isrc": "FRZ111800002"},
+    "external_urls": {"spotify": "https://open.spotify.com/track/0SingleTrackId00000001"},
+    "id": "0SingleTrackId00000001",
+    "is_local": false,
+    "name": "Single",
+    "track_number": 1,
+    "type": "track",
+    "uri": "spotify:track:0SingleTrackId00000001"
+  },
+  "currently_playing_type": "track"
+}

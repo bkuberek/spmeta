@@ -1,0 +1,64 @@
+{
+  "device": {
+    "id": "d0f1a2b3c4d5e6f708192a3b4c5d6e7f80910a1b",
+    "is_active": true,
+    "is_private_session": false,
+    "is_restricted": false,
+    "name": "Living Room",
+    "type": "Speaker",
+    "volume_percent": 55,
+    "supports_volume": true
+  },
+  "repeat_state": "off",
+  "shuffle_state": false,
+  "context": {
+    "type": "album",
+    "href": "https://api.spotify.com/v1/albums/1AhDOtG9vPSOmsWgNW0BEY",
+    "external_urls": {"spotify": "https://open.spotify.com/album/1AhDOtG9vPSOmsWgNW0BEY"},
+    "uri": "spotify:album:1AhDOtG9vPSOmsWgNW0BEY"
+  },
+  "timestamp": 1761586800000,
+  "progress_ms": 120165,
+  "is_playing": true,
+  "item": {
+    "album": {
+      "album_type": "album",
+      "total_tracks": 12,
+      "external_urls": {"spotify": "https://open.spotify.com/album/1AhDOtG9vPSOmsWgNW0BEY"},
+      "id": "1AhDOtG9vPSOmsWgNW0BEY",
+      "images": [
+        {"url": "https://i.scdn.co/image/ab67616d0000485175e4b2dc6e7f1f9bd9a51c04", "height": 64, "width": 64},
+        {"url": "https://i.scdn.co/image/ab67616d0000b273a9ab54d90005cfd439f821e8", "height": 640, "width": 640},
+        {"url": "https://i.scdn.co/image/ab67616d00001e02b3c1d9a5a2e8f4c7d6a09a11", "height": 300, "width": 300}
+      ],
+      "name": "Home",
+      "release_date": "2018-05-04",
+      "release_date_precision": "day",
+      "type": "album",
+      "uri": "spotify:album:1AhDOtG9vPSOmsWgNW0BEY",
+      "artists": [
+        {"external_urls": {"spotify": "https://open.spotify.com/artist/0AvanArtistId000000001"}, "id": "0AvanArtistId000000001", "name": "Alvan", "type": "artist", "uri": "spotify:artist:0AvanArtistId000000001"},
+        {"external_urls": {"spotify": "https://open.spotify.com/artist/0AhmedArtistId00000002"}, "id": "0AhmedArtistId00000002", "name": "Ahmed", "type": "artist", "uri": "spotify:artist:0AhmedArtistId00000002"}
+      ]
+    },
+    "artists": [
+      {"external_urls": {"spotify": "https://open.spotify.com/artist/0AvanArtistId000000001"}, "id": "0AvanArtistId000000001", "name": "Alvan", "type": "artist", "uri": "spotify:artist:0AvanArtistId000000001"},
+      {"external_urls": {"spotify": "https://open.spotify.com/artist/0TylerArtistId00000003"}, "id": "0TylerArtistId00000003", "name": "Tyler, The Creator", "type": "artist", "uri": "spotify:artist:0TylerArtistId00000003"}
+    ],
+    "disc_number": 1,
+    "duration_ms": 238341,
+    "explicit": false,
+    "external_ids": {"isrc": "FRZ111800001"},
+    "external_urls": {"spotify": "https://open.spotify.com/track/4brK3gpPjXArNUlU1hBXTe"},
+    "href": "https://api.spotify.com/v1/tracks/4brK3gpPjXArNUlU1hBXTe",
+    "id": "4brK3gpPjXArNUlU1hBXTe",
+    "is_local": false,
+    "name": "Amazone",
+    "preview_url": null,
+    "track_number": 4,
+    "type": "track",
+    "uri": "spotify:track:4brK3gpPjXArNUlU1hBXTe"
+  },
+  "currently_playing_type": "track",
+  "actions": {"disallows": {"resuming": true}}
+}

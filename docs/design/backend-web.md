@@ -120,6 +120,14 @@ User-Agent: spmeta/<version> (+https://github.com/bkuberek/spmeta)
 
 Read at most 1 MiB of the response body. The request timeout is 5 s.
 
+Details the request leaves open:
+
+- `web.Backend` is a struct. `Tokens` is required; `Endpoints` (only `API` is used), `HTTPClient`, `Now`, `Sleep` (the wait before a retry), `Log`, `MaxRetryWait`, and `Version` (the User-Agent version, `dev` when empty) default to the production values when zero. A zero `MaxRetryWait` never waits, which is watch mode; `web.OneShotRetryWait` is the 10 s of a one-shot read.
+- `Tokens` is the one-method interface `Token(ctx, force bool) (string, error)`, which `*auth.TokenSource` implements; tests pass a fake. Its `*backend.Error` values (not logged in, login expired) are returned unchanged and any other error is `KindUnexpected`.
+- The 5 s timeout applies to each attempt, including reading the body. A trailing `/` on the base URL is ignored.
+- Redirects are never followed: a 3xx is an unexpected status, so the client cannot leave the configured base URL.
+- A cancelled or expired context ends the read at once with `KindUnexpected` ("read cancelled"), with no retry.
+
 ## Response handling
 
 | Response | Handling | Evidence |
@@ -134,15 +142,23 @@ Read at most 1 MiB of the response body. The request timeout is 5 s.
 | 5xx, or a network error | Wait 1 s and retry once; then `KindUnexpected` | Defensive |
 | Any other status | `KindUnexpected`: "unexpected HTTP status N from the Spotify Web API" | Defensive |
 
+Details the table leaves open:
+
+- The three retries have separate budgets: one refresh after a 401, one retry after a 5xx or network error (a 5xx followed by a network error counts as the same retry), and the 429 attempts under Rate limits. Each is bounded, so a read ends after a bounded number of requests.
+- A 5xx that persists reports "unexpected HTTP status N from the Spotify Web API" with the second status. A network error that persists reports "could not reach the Spotify Web API."; a timeout reports "Spotify did not answer within 5 s."
+- A second 401 is `KindAuthRequired`: "Spotify rejected the access token even after a refresh." Hint: "Run `spmeta auth login`." If the forced refresh itself fails, its error is returned.
+- The 403 message is "Spotify refused access (403): <error.message>", or "Spotify refused access (403)." without detail. `error.message` is server text: it is shown only when it is one printable line of at most 200 bytes that contains none of the access tokens the read sent.
+
 ## Rate limits
 
 Spotify computes limits over a rolling 30-second window per developer account and returns 429 with `Retry-After` in seconds; the body may include `"reason": "QUOTA_EXCEEDED"`.
 
-- Parse `Retry-After` as integer seconds; if it is missing or invalid, use 5 s.
+- Parse `Retry-After` as integer seconds; if it is missing or invalid, use 5 s. Invalid includes 0, negative values, fractions, and HTTP dates, so a zero cannot cause a tight loop. A value above 24 h is capped at 24 h.
 - The client option `MaxRetryWait` decides whether to wait inside the read:
   - One-shot reads use `MaxRetryWait = 10 s`: when `Retry-After` is at most 10 s, sleep and retry, up to 3 attempts in total. Otherwise, or after the third 429, return `KindRateLimited` (exit 7).
   - Watch mode uses `MaxRetryWait = 0`: return `KindRateLimited` immediately with `RetryAfter`; the watch loop sleeps.
-- The `KindRateLimited` message includes the wait, for example "rate limited by Spotify; retry after 30 s", plus " (QUOTA_EXCEEDED)" when the body says so.
+- The `KindRateLimited` message includes the wait, for example "rate limited by Spotify; retry after 30 s", plus " (QUOTA_EXCEEDED)" when the body says so. The documentation does not place `reason` in the body, so a top-level `reason` and `error.reason` are both read.
+- A retry after a 429 reuses the same access token; the wait is at most `MaxRetryWait`, and the three attempts include the first request.
 - Never retry in a tight loop.
 
 ## Mapping
@@ -165,7 +181,13 @@ Spotify computes limits over a rolling 30-second window per developer account an
 | `explicit` | `item.explicit` | `item.explicit` |
 | `device` | `device.name`, `device.type`, `device.volume_percent` | same |
 
-"Largest image" means the greatest `width * height`; when dimensions are null, take the first entry (Spotify lists the largest first). An `item.type` other than `track` or `episode` maps the common fields (`name`, `uri`, `duration_ms`) with `type: unknown`. Unknown JSON fields are ignored. Local files (`item.is_local: true`) keep `uri`; `url` and `artwork_url` are null when absent.
+"Largest image" means the greatest `width * height`. An image without both dimensions counts as 0, so when no image has dimensions, or two tie, the first entry wins (Spotify lists the largest first). Entries whose URL is empty or not HTTPS are skipped, because `artwork_url` must be an HTTPS URL. An `item.type` other than `track` or `episode` maps the common fields (`name`, `uri`, `duration_ms`) with `type: unknown`. Unknown JSON fields are ignored. Local files (`item.is_local: true`) keep `uri`; `url` and `artwork_url` are null when absent.
+
+Details the table leaves open:
+
+- `url` is `item.external_urls.spotify` when present, else derived from `uri` by `model.Normalize`. Position, device, and state are mapped for every item, including an ad whose `item` is null.
+- During an ad (`currently_playing_type: "ad"`), a non-null `item` is mapped as its own `item.type` says, then `type` is set to `ad`.
+- A `device` that is null maps to a null `device`; a null `volume_percent` stays null.
 
 ## Timeouts
 
@@ -186,4 +208,4 @@ Spotify computes limits over a rolling 30-second window per developer account an
 
 - `httptest.Server` stands in for both endpoints through `Endpoints`.
 - The browser opener is the `Open func(url string) error` field of `LoginOptions`, replaced in tests by a function that calls the callback URL directly. The `cli` package exposes it as `WithBrowserOpener`, and the service URLs as `WithAuthEndpoints`.
-- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock. `LoginOptions.Sleep` replaces the 180 s wait for the callback, so a timeout test returns at once.
+- `now func() time.Time` and `sleep func(ctx, time.Duration) error` are injected so expiry and `Retry-After` tests run instantly. In `internal/backend/web` they are the exported `Now` and `Sleep` fields of `Backend`, and `Tokens` takes a fake. In `internal/auth` they are the exported `Now` and `Sleep` fields of `TokenSource`; `Sleep` replaces the 100 ms wait between lock attempts, which also lets a test observe that a refresher is waiting for the lock. `LoginOptions.Sleep` replaces the 180 s wait for the callback, so a timeout test returns at once.

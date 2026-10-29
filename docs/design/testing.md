@@ -89,8 +89,9 @@ Stdout fixtures use the read script's output format with real U+001F separators.
 | `player-no-isrc.json` | Track without `external_ids` | Research (Development Mode field removals) |
 | 204 response | Empty body | Synthetic; observed, undocumented |
 | `error-401.json`, `error-403.json` | Web API error bodies | Research |
-| `error-429-quota.json` | 429 body with `reason: QUOTA_EXCEEDED`, plus `Retry-After` header in the test | Research (July 2026 changelog) |
+| `error-429-quota.json` | 429 body with a top-level `reason: QUOTA_EXCEEDED`, plus `Retry-After` header in the test | Research (July 2026 changelog); the position of `reason` is synthetic |
 | `error-500.json` | Server error | Synthetic |
+| `golden/*.json` | `--format json` output of the `player-*` fixtures above (all but `player-unknown-null-item.json`), with a fixed `fetched_at` | Generated with `-update`, validated against the schema |
 | `token-exchange.json` | Token response with refresh token | Research (PKCE tutorial) |
 | `token-refresh-no-rotation.json` | Refresh response without `refresh_token` | Research (refresh tutorial) |
 | `token-invalid-grant.json` | `{"error": "invalid_grant", ...}` | Research |
