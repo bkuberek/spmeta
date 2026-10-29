@@ -269,3 +269,12 @@ func TestTokenFormattingHidesSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshExpiresAtIsSixMonthsAfterAuthorization(t *testing.T) {
+	t.Parallel()
+	tok := sampleToken()
+	tok.AuthorizedAt = time.Date(2026, 10, 27, 17, 40, 0, 0, time.UTC)
+	if got, want := tok.RefreshExpiresAt(), time.Date(2027, 4, 27, 17, 40, 0, 0, time.UTC); !got.Equal(want) {
+		t.Errorf("RefreshExpiresAt = %v, want %v", got, want)
+	}
+}

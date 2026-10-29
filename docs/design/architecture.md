@@ -56,6 +56,7 @@ internal/backend/web/
 internal/auth/
   pkce.go                 # verifier, challenge, state
   login.go                # loopback server, authorize URL, code exchange
+  browser.go              # OpenBrowser: open (macOS) or xdg-open (Linux)
   token.go                # token file read and atomic write (0600)
   refresh.go              # refresh logic with file lock
   lock_unix.go            # flock on token.json.lock
@@ -187,7 +188,7 @@ if Web != nil && errW == nil                -> return W   # paused on another de
 return Worse(errL, errW)
 ```
 
-For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is nil, return `NotAvailable` with the message "not logged in to the Spotify Web API" and the hint "run `spmeta auth login`" (or, in builds without Web, "Web mode is not available in this version").
+For `local`, return `Local.Read`. For `web`, return `Web.Read`; when `Web` is nil, return `NotAvailable` with the message "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`." (or, in builds without Web, "Web mode is not available in this version").
 
 Error precedence for `Worse`, highest first: `KindPermissionDenied`, `KindAuthRequired`, `KindRateLimited`, `KindUnexpected`, `KindNothingPlaying`, `KindNotAvailable`. A nil error has the lowest precedence. When both errors have the same kind, the local error wins.
 

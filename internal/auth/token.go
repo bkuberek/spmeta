@@ -21,6 +21,9 @@ const (
 	// refreshMargin is how far from expiry an access token still counts as
 	// valid.
 	refreshMargin = 60 * time.Second
+	// refreshLifetimeMonths is how long a refresh token lives after
+	// authorization; refreshing does not extend it.
+	refreshLifetimeMonths = 6
 
 	msgNotLoggedIn = "not logged in to the Spotify Web API"
 	hintLogin      = "Run `spmeta auth login`."
@@ -42,6 +45,12 @@ type Token struct {
 // fresh reports whether the access token is valid for more than the refresh
 // margin after now.
 func (t Token) fresh(now time.Time) bool { return t.ExpiresAt.Sub(now) > refreshMargin }
+
+// RefreshExpiresAt estimates when the refresh token stops working: 6 months
+// after authorization.
+func (t Token) RefreshExpiresAt() time.Time {
+	return t.AuthorizedAt.AddDate(0, refreshLifetimeMonths, 0)
+}
 
 // String omits the access and refresh tokens.
 func (t Token) String() string {

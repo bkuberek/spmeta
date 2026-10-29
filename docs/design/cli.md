@@ -18,7 +18,7 @@ spmeta help [COMMAND]
 
 Parsing uses the Go `flag` package ([ADR 0006](../decisions/0006-dependencies.md)): `-flag` and `--flag` are equivalent, values are given as `--flag value` or `--flag=value`, flags must precede any positional argument, and the only short flag is `-h`. The first argument selects a subcommand when it is `auth`, `doctor`, `version`, or `help`; otherwise all arguments belong to the root read command, which accepts no positional arguments.
 
-The `auth` subcommands and `--source web` exist from task T12 and T13 onward ([ADR 0004](../decisions/0004-web-api-built-last.md)). In a local-only build, `auth` is an unknown command (exit 2) and `--source web` exits 4 with "Web mode is not available in this version."
+The `auth` subcommands exist from task T12 and `--source web` from task T13 onward ([ADR 0004](../decisions/0004-web-api-built-last.md)). In a build without Web, `--source web` exits 4 with "Web mode is not available in this version."
 
 ## Root command: read the current item
 
@@ -148,18 +148,21 @@ In watch mode, the process exits only on a fatal error (5 or 6), a usage error (
 | `--client-id` | from env or configuration | Spotify app Client ID |
 | `--port` | 0 (any free port) | Loopback port for the callback |
 | `--no-browser` | off | Do not open a browser; only print the URL |
+| `--debug` | off | Write diagnostics to stderr; never tokens or codes |
+| `--config` | see Configuration file | Read this configuration file instead of the default |
 
 Behavior:
 
-- Without a Client ID from any layer, print the one-time setup steps (create an app, register `http://127.0.0.1/callback`, copy the Client ID) and exit 2.
+- `--port` outside 0 to 65535 is a usage error (exit 2). A port that is already in use exits 1 with "port N is in use."
+- Without a Client ID from any layer, print the one-time setup steps (create an app, register `http://127.0.0.1/callback`, copy the Client ID) to stderr and exit 2. The Client ID is trimmed of surrounding whitespace.
 - Print the authorization URL to stderr, open it with `open` (macOS) or `xdg-open` (Linux) unless `--no-browser`, and wait up to 180 s for the callback.
 - On success, write the token file, print `Logged in. Token stored at <path>.`, and exit 0.
-- If the user denies access, the callback times out, or the code exchange fails, exit 5.
+- If the user denies access, the callback times out, the code exchange is refused, or `spmeta` is interrupted while waiting, exit 5. A network failure or a 5xx from Spotify during the exchange exits 1.
 - The Client ID passed with `--client-id` is stored in the token file so later refreshes do not depend on the flag. It is not written to `config.toml`.
 
 ### auth logout
 
-`spmeta auth logout` deletes the token file and exits 0, also when no token file exists. It prints a reminder that access can be revoked at `https://www.spotify.com/account/apps/`, because Spotify offers no token-revocation endpoint.
+`spmeta auth logout` deletes the token file and exits 0, also when no token file exists (it then prints `Not logged in. No token file at <path>.` instead of `Logged out. Removed <path>.`). It leaves `token.json.lock` in place and prints a reminder that access can be revoked at `https://www.spotify.com/account/apps/`, because Spotify offers no token-revocation endpoint. It exits 1 when the file exists but cannot be removed.
 
 ### auth status
 
@@ -175,7 +178,16 @@ Refresh token expires:  about 2027-04-27 (6 months after authorization)
 Token file:             /home/user/.config/spmeta/token.json (mode 0600)
 ```
 
-It exits 0 when a token file exists and parses, and 4 otherwise. When the refresh token expires within 14 days, it adds `Warning: run 'spmeta auth login' before <date>.` When the token file mode is wider than 0600, it adds a warning with the `chmod 600` command.
+It exits 0 when a token file exists and parses, and 4 otherwise; a file that exists but cannot be read or parsed prints its error and also exits 4, because nothing was refreshed. The tokens themselves are never printed.
+
+Warnings follow the table on stdout:
+
+- When the estimated refresh-token expiry is 14 days away or less, `Warning: run 'spmeta auth login' before <date>.` Once that date has passed, `Warning: the saved login probably expired on <date>; run 'spmeta auth login'.`
+- When the token file mode allows group or other access (any of the bits `0077`), `Warning: other users can access the token file. Run: chmod 600 '<path>'`.
+
+On Windows the mode is not shown and the mode warning is not given, because Go does not report meaningful permission bits there.
+
+`logout` and `status` accept only `--config`. All three commands print configuration warnings (unknown keys) to stderr and treat an invalid configuration as a usage error. When no home directory or `XDG_CONFIG_HOME` is known, they exit 1 with "no location is known for the token file".
 
 ### doctor
 
@@ -221,7 +233,7 @@ The version comes from `-ldflags "-X main.version=..."` in release builds, or fr
 
 ### help
 
-`spmeta help` prints the synopsis; `spmeta help auth` and `spmeta help doctor` print the subcommand usage. `-h` on any command does the same.
+`spmeta help` prints the synopsis; `spmeta help auth` and `spmeta help doctor` print the subcommand usage. `-h` on any command does the same; `auth login -h`, `auth logout -h` and `auth status -h` print the usage of `auth`.
 
 ## Environment variables
 

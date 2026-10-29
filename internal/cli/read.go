@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bkuberek/spmeta/internal/auth"
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/backend/local"
 	"github.com/bkuberek/spmeta/internal/config"
@@ -37,6 +38,10 @@ type options struct {
 	env      config.Env
 	sleep    func(context.Context, time.Duration) error
 	now      func() time.Time
+	// endpoints and browser are for the auth commands; zero values select
+	// the Spotify services and the system browser.
+	endpoints auth.Endpoints
+	browser   func(url string) error
 }
 
 // WithEnv replaces the process environment, home directory and filesystem
@@ -62,6 +67,19 @@ func WithBackend(b backend.Backend) Option {
 // --source web reports that Web mode is not available.
 func WithWebBackend(b backend.Backend) Option {
 	return func(o *options) { o.web = b }
+}
+
+// WithAuthEndpoints replaces the Spotify service URLs the auth commands
+// contact, so that tests can use httptest servers.
+func WithAuthEndpoints(e auth.Endpoints) Option {
+	return func(o *options) { o.endpoints = e }
+}
+
+// WithBrowserOpener replaces how `auth login` opens the authorization URL,
+// which defaults to the system browser. Tests use it to follow the redirect
+// themselves.
+func WithBrowserOpener(f func(url string) error) Option {
+	return func(o *options) { o.browser = f }
 }
 
 // renderFunc turns the current item (nil when nothing is playing) into the

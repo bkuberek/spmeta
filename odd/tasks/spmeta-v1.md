@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done on feat/web-mode; T12 next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11 done and T12 code done on feat/web-mode, T12 real login pending; T13 next). Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -273,7 +273,29 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T12 Login flow and auth commands
 
-- [ ] T12 complete
+- [ ] T12 complete (code done 2026-10-29; the manual real-login acceptance is pending with the user)
+- Evidence (2026-10-29):
+  - RED: build failures on `auth.Login`, `auth.LoginOptions` and `cli.WithAuthEndpoints`. With a stub `Login`, 22 tests failed.
+  - Mutation checks: an off-by-one in the 14-day warning, an inverted state check, and a trailing `/` on the redirect URI were each caught.
+  - GREEN: `go test -race -count=1 ./...` passes, as does `-count=10 -run Login`. `go vet` (darwin and linux) is clean, `golangci-lint` reports 0 issues, and the linux and windows builds compile. The parent re-ran tests and lint.
+  - Secrecy test: the callback code, tokens and PKCE verifier never appear in stdout, stderr or the debug log.
+  - Built binary with an empty temp config: `auth status` exits 4 with the not-logged-in message and hint; `auth login` prints the setup text and exits 2.
+  - Spec clarifications in backend-web.md and cli.md:
+    - a callback with no code gets 400 and is ignored;
+    - a callback `error` is shown only when it is a plain OAuth code;
+    - an exchange 400 description is shown only when it is one safe printable line;
+    - a 200 without a refresh token is `KindUnexpected`;
+    - Ctrl-C gives exit 5;
+    - the listener is IPv4 only;
+    - `EADDRINUSE` and Windows error 10048 both mean the port is in use;
+    - `--port` range is checked;
+    - `auth status` exits 4 for an unreadable file;
+    - an expired-refresh warning is added;
+    - no mode warning on Windows.
+  - Hint capitalization is aligned in architecture.md and backend-web.md.
+  - The T8 "not logged in" message stays for T14, because no Web backend exists yet. T14 must also update README's `--source web` line.
+  - Actual: about 1,720 lines including tests, against a 400 forecast.
+- Pending (manual): one real `spmeta auth login` against the user's Spotify app. This is the first real test that Spotify accepts a portless registered loopback redirect URI at a random port; the fallback is a fixed port with `--port`.
 - Goal: the loopback login server and `spmeta auth login|logout|status`.
 - Files: `internal/auth/{login.go,login_test.go}`, `internal/cli/{auth.go,auth_test.go}`, `internal/cli/usage.go`.
 - Test-first: RED login tests with an injected opener calling the callback: success, state mismatch ignored, `error=access_denied` exit 5, 180 s timeout (injected clock) exit 5, redirect URI byte-identical, port in use exit 1; command tests for missing Client ID (setup text, exit 2), logout idempotent, status output and exit 0 versus 4, expiry warning within 14 days, mode warning.

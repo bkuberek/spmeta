@@ -79,6 +79,11 @@ func (s *TokenSource) sleep(ctx context.Context, d time.Duration) error {
 	if s.Sleep != nil {
 		return s.Sleep(ctx, d)
 	}
+	return sleepFor(ctx, d)
+}
+
+// sleepFor waits for d or until ctx ends.
+func sleepFor(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
@@ -90,14 +95,18 @@ func (s *TokenSource) sleep(ctx context.Context, d time.Duration) error {
 }
 
 func (s *TokenSource) endpoint() tokenEndpoint {
-	e := tokenEndpoint{url: s.Endpoints.tokenURL(), client: s.HTTPClient, log: s.Log}
-	if e.client == nil {
-		e.client = http.DefaultClient
+	return newTokenEndpoint(s.Endpoints, s.HTTPClient, s.Log)
+}
+
+// newTokenEndpoint fills the defaults of a nil client and a nil logger.
+func newTokenEndpoint(e Endpoints, client *http.Client, log *slog.Logger) tokenEndpoint {
+	if client == nil {
+		client = http.DefaultClient
 	}
-	if e.log == nil {
-		e.log = slog.New(slog.DiscardHandler)
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
 	}
-	return e
+	return tokenEndpoint{url: e.tokenURL(), client: client, log: log}
 }
 
 // Token returns an access token that stays valid for more than 60 s. It
