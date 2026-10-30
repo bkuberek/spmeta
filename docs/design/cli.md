@@ -31,7 +31,7 @@ The root command reads the current item once, prints it, and exits; with `--watc
 | `--format` | `text`, `json`, `template`, `waybar` | `text` | Output format. Passing `--template` on the command line without `--format` selects `template`; an explicit `--format` other than `template` ignores `--template` |
 | `--template` | string | none | Template for `--format template` (see Template syntax) |
 | `--player` | string | none | MPRIS player name or bus-name suffix (Linux). Ignored by other backends, with a `--debug` note |
-| `--watch` | flag | off | Keep running; print a line only when the item or state changes |
+| `--watch` | flag | off | Keep running; print a line only when the item or state changes. On Linux, a change is printed as soon as the player announces it; polling remains the fallback |
 | `--interval` | seconds, decimal allowed | 1 (local), `web_interval` (web) | Poll interval for `--watch`. Minimum 0.5 for local, 1 for web. Only valid with `--watch` |
 | `--quiet` | flag | off | Print nothing on stdout or stderr; only set the exit code. Not valid with `--watch` |
 | `--debug` | flag | off | Write diagnostics to stderr; never tokens or codes |
@@ -165,6 +165,8 @@ Every non-zero exit prints one `spmeta: <message>` line on stderr, optionally fo
 With `--source auto`, when no source returns an item, the exit code comes from the highest-precedence error: 6, then 5, then 7, then 1, then 3, then 4 ([ADR 0005](../decisions/0005-auto-source-resolution.md)).
 
 In watch mode, the process exits only on a fatal error (5 or 6), a usage error (2), or a signal (0). Nothing playing, unavailable sources, rate limits, and transient errors keep it running. The one exception is a source that can never become available during the run, such as `--source web` without a token file: watch mode exits 4 at once instead of polling.
+
+Watch mode polls every `--interval`. On Linux, with `--source auto` or `local`, it also listens for MPRIS change signals and reads at once when a player announces a change, such as a new track, a pause, or a player starting or quitting. Reads that signals start are at least 100 ms apart. When the listener cannot start, for example without a session bus, watch mode polls only; `--debug` logs why. The Web API sends no change notifications, so `--source web` always polls. See [backend-linux.md](./backend-linux.md#change-notifications).
 
 ## Subcommands
 

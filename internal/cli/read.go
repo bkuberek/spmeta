@@ -214,7 +214,7 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 		}
 		interval := pollInterval(settings, flags.Interval != nil)
 		log.Debug("watching", "interval", interval)
-		return runWatch(ctx, resolver, interval, render, stdout, stderr, opts)
+		return runWatch(ctx, resolver, interval, render, stdout, stderr, log, opts)
 	}
 	var np *model.NowPlaying
 	item, err := resolver.Read(ctx)

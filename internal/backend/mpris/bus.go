@@ -34,6 +34,16 @@ type Bus interface {
 	Close() error
 }
 
+// signaler is the optional part of a Bus that reports player changes. The
+// godbus adapter implements it.
+type signaler interface {
+	// Signals subscribes to the signals that announce a player change and
+	// returns a channel that receives a value for each, at most one pending.
+	// The channel closes when the connection ends. ctx bounds the
+	// subscription calls only.
+	Signals(ctx context.Context) (<-chan struct{}, error)
+}
+
 // DialFunc connects to the session bus. It may return a *backend.Error, which
 // Read passes through unchanged; any other error becomes "not available".
 // ctx stays live for the whole read, so an implementation may tie the

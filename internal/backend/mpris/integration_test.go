@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -152,10 +153,20 @@ func fixtureProps(t *testing.T, name string) Properties {
 	return nil
 }
 
+// rootIface is the MPRIS root interface, whose changes must not wake.
+const rootIface = "org.mpris.MediaPlayer2"
+
+// mockPlayer is a player served on the test bus.
+type mockPlayer struct {
+	conn  *dbus.Conn
+	props *prop.Properties
+}
+
 // servePlayer exports a mock MPRIS player on its own connection, with real
 // D-Bus types: an object path for local-style track ids, plain strings
-// otherwise.
-func servePlayer(t *testing.T, addr, suffix string, p Properties) {
+// otherwise. Setting PlaybackStatus, Metadata, or the root interface's
+// Identity emits PropertiesChanged, as real players do.
+func servePlayer(t *testing.T, addr, suffix string, p Properties) mockPlayer {
 	t.Helper()
 	conn, err := dbus.Connect(addr)
 	if err != nil {
@@ -172,14 +183,137 @@ func servePlayer(t *testing.T, addr, suffix string, p Properties) {
 		meta[k] = dbus.MakeVariant(v)
 	}
 	player := map[string]*prop.Prop{
-		"PlaybackStatus": {Value: p["PlaybackStatus"]},
+		"PlaybackStatus": {Value: p["PlaybackStatus"], Emit: prop.EmitTrue},
 		"Position":       {Value: p["Position"]},
-		"Metadata":       {Value: meta},
+		"Metadata":       {Value: meta, Emit: prop.EmitTrue},
 	}
-	if _, err := prop.Export(conn, playerPath, prop.Map{playerIface: player}); err != nil {
+	root := map[string]*prop.Prop{"Identity": {Value: suffix, Emit: prop.EmitTrue}}
+	props, err := prop.Export(conn, playerPath, prop.Map{playerIface: player, rootIface: root})
+	if err != nil {
 		t.Fatalf("export mock player: %v", err)
 	}
 	requestName(t, conn, busPrefix+suffix)
+	return mockPlayer{conn: conn, props: props}
+}
+
+func TestIntegrationChanges(t *testing.T) {
+	addr := busAddress(t)
+
+	t.Run("a Player property change wakes", func(t *testing.T) {
+		player := servePlayer(t, addr, "spotify", fixtureProps(t, "paused"))
+		waitForPlayers(t, addr, "spotify")
+		wake := listen(t)
+		player.props.SetMust(rootIface, "Identity", "Spotify Premium")
+		expectNoWake(t, wake, "a root interface change")
+		player.props.SetMust(playerIface, "PlaybackStatus", "Playing")
+		expectWake(t, wake, "PropertiesChanged on the Player interface")
+	})
+
+	t.Run("an MPRIS player appearing or quitting wakes", func(t *testing.T) {
+		waitForPlayers(t, addr)
+		wake := listen(t)
+		other, err := dbus.Connect(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = other.Close() })
+		requestName(t, other, "org.example.NotAPlayer")
+		expectNoWake(t, wake, "a name outside org.mpris.MediaPlayer2")
+		player := servePlayer(t, addr, "spotifyd.instance42", fixtureProps(t, "spotifyd_playing"))
+		expectWake(t, wake, "a player appearing")
+		_ = player.conn.Close()
+		expectWake(t, wake, "a player quitting")
+	})
+
+	t.Run("the channel closes with the context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wake, err := New(Dial, "", time.Now).Changes(ctx)
+		if err != nil {
+			t.Fatalf("Changes: %v", err)
+		}
+		cancel()
+		deadline := time.After(3 * time.Second)
+		for {
+			select {
+			case _, ok := <-wake:
+				if !ok {
+					return
+				}
+			case <-deadline:
+				t.Fatal("channel still open after ctx ended")
+			}
+		}
+	})
+
+	t.Run("no session bus", func(t *testing.T) {
+		t.Setenv(envSessionBus, "")
+		t.Setenv(envRuntimeDir, t.TempDir())
+		_, err := New(Dial, "", time.Now).Changes(context.Background())
+		requireNotAvailable(t, err, "no D-Bus session bus found")
+	})
+}
+
+// listen starts the notifier for the rest of the test.
+func listen(t *testing.T) <-chan struct{} {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	wake, err := New(Dial, "", time.Now).Changes(ctx)
+	if err != nil {
+		t.Fatalf("Changes: %v", err)
+	}
+	return wake
+}
+
+func expectWake(t *testing.T, wake <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case _, ok := <-wake:
+		if !ok {
+			t.Fatalf("channel closed waiting for %s", what)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("no wake for %s", what)
+	}
+}
+
+// expectNoWake gives a wrongly matched signal 100 ms to arrive; on a private
+// bus it takes well under a millisecond.
+func expectNoWake(t *testing.T, wake <-chan struct{}, what string) {
+	t.Helper()
+	select {
+	case <-wake:
+		t.Fatalf("woken by %s", what)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// waitForPlayers waits until the MPRIS players on the bus are exactly want,
+// sorted, so that names released by earlier tests cannot wake a listener.
+func waitForPlayers(t *testing.T, addr string, want ...string) {
+	t.Helper()
+	conn, err := dbus.Connect(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	bus := &godbusBus{conn: conn}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		names, err := bus.ListNames(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := suffixes(names)
+		if slices.Equal(got, want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("players = %v, want %v", got, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // requestName retries because the bus releases the name of a closed

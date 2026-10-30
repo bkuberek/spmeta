@@ -17,14 +17,15 @@ const (
 )
 
 type timeouts struct {
-	connect, list, getAll, total time.Duration
+	connect, list, getAll, total, subscribe time.Duration
 }
 
 var defaultTimeouts = timeouts{
-	connect: 500 * time.Millisecond,
-	list:    500 * time.Millisecond,
-	getAll:  500 * time.Millisecond,
-	total:   2 * time.Second,
+	connect:   500 * time.Millisecond,
+	list:      500 * time.Millisecond,
+	getAll:    500 * time.Millisecond,
+	total:     2 * time.Second,
+	subscribe: 500 * time.Millisecond,
 }
 
 // Backend reads the current item from an MPRIS player. It keeps Position

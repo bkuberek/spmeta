@@ -19,6 +19,8 @@ const interval = time.Second
 type step struct {
 	np  model.NowPlaying
 	err error
+	// during runs inside the read, as a player signal arriving mid-read does.
+	during func()
 }
 
 // scripted replays steps in order and cancels the context when asked to
@@ -36,6 +38,9 @@ func (s *scripted) Read(ctx context.Context) (model.NowPlaying, error) {
 	}
 	st := s.steps[s.next]
 	s.next++
+	if st.during != nil {
+		st.during()
+	}
 	return st.np, st.err
 }
 
@@ -43,6 +48,8 @@ type harness struct {
 	emitted []string
 	errs    []string
 	sleeps  []time.Duration
+	// wakeable records, per sleep, whether a wake could end it.
+	wakeable []bool
 }
 
 func (h *harness) run(t *testing.T, steps []step, mutate ...func(*watch.Options)) error {
@@ -59,8 +66,9 @@ func (h *harness) run(t *testing.T, steps []step, mutate ...func(*watch.Options)
 			h.emitted = append(h.emitted, fmt.Sprintf("%s/%s", *np.Title, np.State))
 			return nil
 		},
-		Sleep: func(ctx context.Context, d time.Duration) error {
+		Sleep: func(ctx context.Context, d time.Duration, wake <-chan struct{}) error {
 			h.sleeps = append(h.sleeps, d)
+			h.wakeable = append(h.wakeable, wake != nil)
 			return ctx.Err()
 		},
 		Errorf: func(format string, args ...any) { h.errs = append(h.errs, fmt.Sprintf(format, args...)) },
@@ -339,7 +347,7 @@ func TestCancellation(t *testing.T) {
 		err := watch.Run(ctx, r, watch.Options{
 			Interval: interval,
 			Emit:     func(*model.NowPlaying) error { emitted++; return nil },
-			Sleep: func(ctx context.Context, _ time.Duration) error {
+			Sleep: func(ctx context.Context, _ time.Duration, _ <-chan struct{}) error {
 				cancel()
 				return ctx.Err()
 			},
@@ -362,7 +370,7 @@ func TestCancellation(t *testing.T) {
 		err := watch.Run(ctx, r, watch.Options{
 			Interval: interval,
 			Emit:     func(*model.NowPlaying) error { t.Error("emit after cancel"); return nil },
-			Sleep:    func(context.Context, time.Duration) error { return nil },
+			Sleep:    func(context.Context, time.Duration, <-chan struct{}) error { return nil },
 			Errorf:   func(f string, a ...any) { errs = append(errs, fmt.Sprintf(f, a...)) },
 		})
 		if err != nil || len(errs) != 0 {
@@ -417,5 +425,225 @@ func TestDefaultSleep(t *testing.T) {
 	}
 	if want := []string{"A", "B"}; !slices.Equal(got, want) {
 		t.Errorf("emitted = %v, want %v", got, want)
+	}
+}
+
+// signal sends n wakes on ch during st's read, dropping those that do not
+// fit, as a notifier does.
+func signal(st step, ch chan struct{}, n int) step {
+	st.during = func() {
+		for range n {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
+	}
+	return st
+}
+
+func withWake(ch <-chan struct{}) func(*watch.Options) {
+	return func(o *watch.Options) { o.Wake = ch }
+}
+
+func TestWake(t *testing.T) {
+	a, b := track("A"), track("B")
+	// A wait that a wake may end is recorded as two sleeps: the gap, which
+	// no wake ends, then the rest of the interval, which a wake may end.
+	gap, rest := watch.MinWakeGap, interval-watch.MinWakeGap
+
+	t.Run("a wake during a read starts the next read after the gap", func(t *testing.T) {
+		wake := make(chan struct{}, 1)
+		var h harness
+		if err := h.run(t, []step{signal(ok(a), wake, 1), ok(b)}, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"A/playing", "B/playing"}; !slices.Equal(h.emitted, want) {
+			t.Errorf("emitted = %v, want %v", h.emitted, want)
+		}
+		if want := []time.Duration{gap, gap, rest}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v: B must be read after the gap, not the interval", h.sleeps, want)
+		}
+		if want := []bool{false, false, true}; !slices.Equal(h.wakeable, want) {
+			t.Errorf("wakeable = %v, want %v", h.wakeable, want)
+		}
+	})
+
+	t.Run("a flood of wakes cannot make reads back to back", func(t *testing.T) {
+		wake := make(chan struct{}, 1)
+		steps := []step{signal(ok(a), wake, 1), signal(ok(b), wake, 1), signal(ok(a), wake, 1)}
+		var h harness
+		if err := h.run(t, steps, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []time.Duration{gap, gap, gap}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v: every read must wait out the gap", h.sleeps, want)
+		}
+	})
+
+	t.Run("a burst of wakes starts one read", func(t *testing.T) {
+		wake := make(chan struct{}, 8)
+		var h harness
+		if err := h.run(t, []step{signal(ok(a), wake, 5), ok(b)}, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []time.Duration{gap, gap, rest}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v: five wakes must cost one read", h.sleeps, want)
+		}
+	})
+
+	t.Run("waits after a read that reached a source can be woken after the gap", func(t *testing.T) {
+		wake := make(chan struct{}, 1)
+		nothing := fail(be(backend.KindNothingPlaying, "nothing"))
+		var h harness
+		if err := h.run(t, []step{ok(a), nothing}, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []time.Duration{gap, rest, gap, rest}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v", h.sleeps, want)
+		}
+		if want := []bool{false, true, false, true}; !slices.Equal(h.wakeable, want) {
+			t.Errorf("wakeable = %v, want %v", h.wakeable, want)
+		}
+	})
+
+	t.Run("waits after errors run their full length", func(t *testing.T) {
+		wake := make(chan struct{}, 1)
+		limited := fail(&backend.Error{Kind: backend.KindRateLimited, Message: "rate limited", RetryAfter: 7 * time.Second})
+		boom := fail(be(backend.KindUnexpected, "x"))
+		var h harness
+		steps := []step{ok(a), signal(limited, wake, 1), signal(boom, wake, 1), ok(a)}
+		if err := h.run(t, steps, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []time.Duration{gap, rest, 7 * time.Second, interval, gap, rest}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v", h.sleeps, want)
+		}
+		if want := []bool{false, true, false, false, false, true}; !slices.Equal(h.wakeable, want) {
+			t.Errorf("wakeable = %v, want %v", h.wakeable, want)
+		}
+	})
+
+	t.Run("a closed wake channel leaves plain polling", func(t *testing.T) {
+		wake := make(chan struct{})
+		closing := ok(b)
+		closing.during = func() { close(wake) }
+		var h harness
+		if err := h.run(t, []step{ok(a), closing, ok(a)}, withWake(wake)); err != nil {
+			t.Fatal(err)
+		}
+		if want := []time.Duration{gap, rest, gap, rest, interval}; !slices.Equal(h.sleeps, want) {
+			t.Errorf("sleeps = %v, want %v", h.sleeps, want)
+		}
+		if want := []bool{false, true, false, false, false}; !slices.Equal(h.wakeable, want) {
+			t.Errorf("wakeable = %v, want %v", h.wakeable, want)
+		}
+	})
+
+	t.Run("without a wake channel every wait is plain", func(t *testing.T) {
+		var h harness
+		if err := h.run(t, []step{ok(a), ok(b)}); err != nil {
+			t.Fatal(err)
+		}
+		if want := []bool{false, false}; !slices.Equal(h.wakeable, want) {
+			t.Errorf("wakeable = %v, want %v", h.wakeable, want)
+		}
+	})
+}
+
+// runAsync runs run, which uses the default sleep, and fails the test when it
+// does not return within a few seconds; cancel then stops it.
+func runAsync(t *testing.T, cancel context.CancelFunc, run func() error) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- run() }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatalf("Run did not return; the wait was not cut short (after cancel: %v)", <-done)
+		return nil
+	}
+}
+
+func TestWakeEndsTheDefaultWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wake := make(chan struct{}, 1)
+	r := &scripted{steps: []step{ok(track("A")), ok(track("B"))}, cancel: cancel}
+	var got []string
+	opts := watch.Options{
+		Interval: time.Hour,
+		Wake:     wake,
+		Emit: func(np *model.NowPlaying) error {
+			got = append(got, *np.Title)
+			if len(got) == 1 {
+				// After the gap, so the wake ends the part of the wait it may end.
+				time.AfterFunc(watch.MinWakeGap+50*time.Millisecond, func() { wake <- struct{}{} })
+			} else {
+				cancel()
+			}
+			return nil
+		},
+	}
+	err := runAsync(t, cancel, func() error { return watch.Run(ctx, r, opts) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"A", "B"}; !slices.Equal(got, want) {
+		t.Errorf("emitted = %v, want %v", got, want)
+	}
+}
+
+func TestCancelDuringWakeableWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := &scripted{steps: []step{ok(track("A")), ok(track("B"))}, cancel: cancel}
+	var emitted int
+	opts := watch.Options{
+		Interval: time.Hour,
+		Wake:     make(chan struct{}),
+		Emit: func(*model.NowPlaying) error {
+			emitted++
+			time.AfterFunc(watch.MinWakeGap+50*time.Millisecond, cancel)
+			return nil
+		},
+	}
+	err := runAsync(t, cancel, func() error { return watch.Run(ctx, r, opts) })
+	if err != nil || emitted != 1 || r.next != 1 {
+		t.Errorf("Run = %v, emitted %d, reads %d; want nil, 1 and 1", err, emitted, r.next)
+	}
+}
+
+// A notifier that stops must not cost an early read: the wait it was part of
+// runs to the end of the interval. Timers never fire early, so the check
+// cannot fail spuriously; a late close only lets it pass vacuously.
+func TestClosingWakeDuringTheDefaultWait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	const wait = 2 * watch.MinWakeGap
+	wake := make(chan struct{})
+	var reads []time.Time
+	r := readerFunc(func(context.Context) (model.NowPlaying, error) {
+		reads = append(reads, time.Now())
+		switch len(reads) {
+		case 1:
+			// Inside the part of the wait that a wake may end.
+			time.AfterFunc(watch.MinWakeGap+wait/4, func() { close(wake) })
+		case 2:
+			cancel()
+		}
+		return track("A"), nil
+	})
+	opts := watch.Options{Interval: wait, Wake: wake, Emit: func(*model.NowPlaying) error { return nil }}
+	if err := runAsync(t, cancel, func() error { return watch.Run(ctx, r, opts) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(reads) != 2 {
+		t.Fatalf("reads = %d, want 2", len(reads))
+	}
+	if got := reads[1].Sub(reads[0]); got < wait {
+		t.Errorf("second read %v after the first, want at least %v: the closed channel ended the wait", got, wait)
 	}
 }

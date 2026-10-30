@@ -12,13 +12,13 @@ Every implementation task is test-first: write the failing test (RED), implement
 | Formatters | Text, JSON, template rendering; template parse errors; control-character sanitizing | Golden files; every golden JSON validated against the schema |
 | Configuration | Precedence of flags, environment, file, defaults; invalid values; unknown keys | Table-driven, with injected `env` and `readFile` |
 | macOS backend | Parser and error mapping | Fake `Runner` returning fixture stdout, stderr, and errors |
-| MPRIS backend | Selection, mapping, track ID normalization, position rule | Fake `Bus` returning fixture `Properties` |
-| MPRIS adapter | Session bus address resolution and variant conversion (pure functions, every OS); godbus calls | Table-driven unit tests; integration test under `dbus-run-session` (Linux CI only) |
+| MPRIS backend | Selection, mapping, track ID normalization, position rule; `Changes` (forwarding, closing on context end, start errors) | Fake `Bus` returning fixture `Properties`; a fake bus that also delivers signals |
+| MPRIS adapter | Session bus address resolution and variant conversion (pure functions, every OS); godbus calls; signal match rules | Table-driven unit tests; integration test under `dbus-run-session` (Linux CI only) with a mock player that emits `PropertiesChanged` |
 | Web auth | PKCE vectors, login server, token file, refresh, lock | `httptest.Server`, injected clock and opener, temporary directories |
 | Web backend | Response table, retries, rate limits, mapping | `httptest.Server` serving fixtures |
-| Resolver | ADR 0005 algorithm and error precedence | Fake backends, table-driven |
-| Watch | Change detection, emission, error handling, signals | Fake reader sequences, injected `Sleep` |
-| CLI | Flag parsing, usage errors, exit codes, `--quiet`, `--debug` secrecy | `cli.Run` with injected stdout, stderr, environment, and backends |
+| Resolver | ADR 0005 algorithm and error precedence; which modes start change notifications | Fake backends, table-driven |
+| Watch | Change detection, emission, error handling, signals; wakes (read before the interval, minimum gap under a flood, burst coalescing, full-length error waits, closed channel, including during a wait, cancellation) | Fake reader sequences, injected `Sleep` that records whether it could be woken; the default timer with a one-hour interval for the wake path |
+| CLI | Flag parsing, usage errors, exit codes, `--quiet`, `--debug` secrecy; watch mode with a notifying backend and with one whose notifications fail to start | `cli.Run` with injected stdout, stderr, environment, and backends |
 
 Conventions:
 
