@@ -50,3 +50,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # Optional: goreleaser skips the AUR and Nix uploads while these are empty.
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+          NUR_GITHUB_TOKEN: ${{ secrets.NUR_GITHUB_TOKEN }}
