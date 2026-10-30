@@ -103,8 +103,18 @@ func (e Env) readFile(path string) ([]byte, error) {
 
 // Load resolves Settings with the precedence flags > environment > file >
 // defaults. Every error it returns is a usage error: it names the flag,
-// variable, or file and key at fault.
+// variable, or file and key at fault. On error the Settings are empty except
+// for TokenPath, which depends only on the environment, so doctor can still
+// check the saved login.
 func Load(flags Flags, env Env) (Settings, error) {
+	s, err := load(flags, env)
+	if err != nil {
+		return Settings{TokenPath: tokenPath(env)}, err
+	}
+	return s, nil
+}
+
+func load(flags Flags, env Env) (Settings, error) {
 	path, origin := configPath(flags.Config, env)
 	fromFlags, err := flagLayer(flags)
 	if err != nil {
