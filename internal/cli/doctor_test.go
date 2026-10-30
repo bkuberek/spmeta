@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bkuberek/spmeta/internal/backend"
 	"github.com/bkuberek/spmeta/internal/backend/local"
@@ -320,3 +322,19 @@ func TestRootUsageListsDoctor(t *testing.T) {
 }
 
 var errCause = errors.New("exit status 1")
+
+func TestDoctorChecksWebWhenConfigIsInvalid(t *testing.T) {
+	s := newWebSetup(t)
+	s.saveLogin(t, time.Hour)
+	s.files = map[string]string{filepath.Join(s.home, ".config", "spmeta", "config.toml"): "format = [\n"}
+	_, stdout, _ := s.doctor(t, grantedMac())
+	if !strings.Contains(stdout, "config  error:") {
+		t.Errorf("stdout lacks the config error:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "web not configured") || strings.Contains(stdout, "not configured") {
+		t.Errorf("stdout reports Web as not configured despite a saved login:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "web     ok: logged in") {
+		t.Errorf("stdout lacks the Web check result:\n%s", stdout)
+	}
+}
