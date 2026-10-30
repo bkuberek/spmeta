@@ -43,6 +43,7 @@ internal/config/
   config.go               # TOML file, env, flag merge into Settings
 internal/backend/
   backend.go              # Backend interface
+  notifier.go             # optional Notifier interface, Coalesce
   errors.go               # Error, Kind, ExitCode, Worse
 internal/backend/macos/
   runner.go               # Runner interface, exec implementation
@@ -54,7 +55,8 @@ internal/backend/mpris/
   select.go               # player matching and selection
   mapping.go              # Metadata to NowPlaying, trackid normalization
   mpris.go                # Backend implementation, position memory
-  dbus_linux.go           # godbus adapter (//go:build linux)
+  notify.go               # Changes: change notifications for watch mode
+  dbus_linux.go           # godbus adapter and signal subscription (//go:build linux)
 internal/backend/local/
   local_darwin.go         # New() returns the macOS backend
   local_linux.go          # New() returns the MPRIS backend
@@ -71,10 +73,10 @@ internal/auth/
   refresh.go              # refresh logic with file lock
   lock_unix.go            # flock on token.json.lock
 internal/resolve/
-  resolve.go              # source resolution (auto, local, web)
+  resolve.go              # source resolution (auto, local, web), change notifications
   throttle.go             # minimum interval between Web reads in watch mode
 internal/watch/
-  watch.go                # polling loop, change detection, emission
+  watch.go                # polling loop with wakes, change detection, emission
 internal/doctor/
   doctor.go               # collects source checks into a report
 schema/
@@ -100,6 +102,28 @@ type Backend interface {
 	Read(ctx context.Context) (model.NowPlaying, error)
 }
 ```
+
+A backend that can announce changes also implements the optional `Notifier` interface. Watch mode uses it to read at once instead of waiting for the next poll (see Watch loop).
+
+```go
+type Notifier interface {
+	// Changes starts listening and returns a channel that receives a value
+	// when the item may have changed, with at most one value pending. The
+	// channel closes when ctx ends or the listener stops. An error means
+	// nothing was started. Changes may run concurrently with Read.
+	Changes(ctx context.Context) (<-chan struct{}, error)
+}
+
+// Coalesce turns each value from in that keep accepts (all when nil) into a
+// wake on a channel holding at most one pending wake; it closes after in.
+func Coalesce[T any](in <-chan T, keep func(T) bool) <-chan struct{}
+```
+
+| Backend | Notifier |
+| --- | --- |
+| MPRIS | Yes: `PropertiesChanged` and `NameOwnerChanged` signals ([backend-linux.md](./backend-linux.md#change-notifications)) |
+| macOS | Not yet; watch mode polls |
+| Web | No; the Web API sends no notifications |
 
 Backends receive their collaborators through constructors so tests can inject fakes:
 
@@ -183,6 +207,11 @@ type Resolver struct {
 }
 
 func (r *Resolver) Read(ctx context.Context) (model.NowPlaying, error)
+
+// Changes implements backend.Notifier: in auto and local modes it starts the
+// local backend's notifications; in web mode, or when the local backend has
+// none, it returns an error.
+func (r *Resolver) Changes(ctx context.Context) (<-chan struct{}, error)
 ```
 
 Algorithm for `auto`:
@@ -214,10 +243,14 @@ type Reader interface {
 }
 
 type Options struct {
-	Interval time.Duration                          // local poll interval
-	Emit     func(np *model.NowPlaying) error       // nil np means nothing playing
-	Sleep    func(ctx context.Context, d time.Duration) error // injected for tests
-	Errorf   func(format string, args ...any)       // one stderr line per call; nil discards
+	Interval time.Duration                    // local poll interval
+	Wake     <-chan struct{}                  // change notifications; nil polls only
+	Emit     func(np *model.NowPlaying) error // nil np means nothing playing
+	// Sleep waits d, or less when ctx ends or a value arrives on wake (nil
+	// when the wait must run its full length; a closed wake never ends it).
+	// Injected for tests.
+	Sleep  func(ctx context.Context, d time.Duration, wake <-chan struct{}) error
+	Errorf func(format string, args ...any) // one stderr line per call; nil discards
 }
 
 // Run polls until ctx is cancelled or a fatal error occurs. It returns nil on
@@ -229,7 +262,7 @@ func Run(ctx context.Context, r Reader, opts Options) error
 
 Loop behavior:
 
-1. Read immediately on start, then sleep `Interval` between reads.
+1. Read immediately on start, then sleep `Interval` between reads. A value on `Wake` ends the sleep, so the next read starts at once, but never sooner than `MinWakeGap` (100 ms) after the previous one (see Change notifications).
 2. Compute a change key for the result. Emit only when the key differs from the previous emitted key. The first result is always emitted.
 3. Handle errors by kind:
 
@@ -254,6 +287,22 @@ Emission per format:
 
 Each line is written with one `Write` call to unbuffered stdout, so consumers see it immediately.
 
+### Change notifications
+
+`runWatch` in `internal/cli` checks whether the reader it watches, the resolver, implements `backend.Notifier`. If so, it calls `Changes` with a context that ends when the loop returns, and passes the channel as `Options.Wake`. Starting is best-effort: on an error, the loop polls only, and `--debug` logs one line with the reason. On Linux the resolver delegates to the MPRIS backend in auto and local modes; macOS and Web have no notifications yet, so they poll as before.
+
+After a read that reached a source (an item, nothing playing, or not available), the loop sleeps in two parts: first `MinWakeGap` (100 ms), which no wake ends, then the rest of `Interval`, which a wake ends. A player that floods signals therefore causes at most one read per 100 ms, each on a fresh D-Bus connection, instead of reads back to back. The rules:
+
+| Situation | Behavior |
+| --- | --- |
+| A wake arrives during the rest of the sleep | The sleep ends and the next read starts at once |
+| A wake arrives during a read or during the gap | The next read starts when the gap ends, 100 ms after the previous read |
+| Several wakes are pending | They are drained together and cost one read |
+| A wake arrives during a sleep after an error (`RateLimited`, `Unexpected`) | Ignored; the `RetryAfter` and backoff sleeps run their full length, and the next read covers the change |
+| The wake channel closes | The current sleep runs to its end; the loop then polls only, at `Interval`, for the rest of the run |
+
+`--interval` keeps its meaning and defaults: it is the pause between reads when nothing announces a change, and polling still finds changes that no notification announces, such as a Web device change. A wake never reads Web more often than `web_interval`, because the throttle in auto mode returns the cached Web result. The loop starts no goroutines; the default `Sleep` selects on the timer, `ctx`, and the wake channel, and stops selecting on the wake channel once it closes.
+
 ### Polling intervals
 
 - Local sources: `--interval` (default 1 s, minimum 0.5 s).
@@ -270,6 +319,7 @@ Each line is written with one `Write` call to unbuffered stdout, so consumers se
 | MPRIS connect plus `ListNames` | 500 ms each | `KindNotAvailable` |
 | MPRIS `GetAll` per player | 500 ms | Player skipped |
 | MPRIS overall read | 2 s | `KindUnexpected` |
+| MPRIS signal subscription (watch mode) | 500 ms connect, 500 ms `AddMatch` | Watch mode polls only |
 | Web API request | 5 s | Retried once after 1 s, then `KindUnexpected` |
 | Token request (exchange or refresh) | 10 s | `KindUnexpected` |
 | Login callback wait | 180 s | `KindAuthRequired` |

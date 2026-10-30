@@ -236,3 +236,70 @@ func TestNilLoggerIsSilent(t *testing.T) {
 		t.Fatalf("Read() error = %v", err)
 	}
 }
+
+// notifying is a local backend that announces changes on its own channel.
+type notifying struct {
+	*fake
+	ch  chan struct{}
+	err error
+	ctx context.Context
+}
+
+func (n *notifying) Changes(ctx context.Context) (<-chan struct{}, error) {
+	n.ctx = ctx
+	if n.err != nil {
+		return nil, n.err
+	}
+	return n.ch, nil
+}
+
+func TestChanges(t *testing.T) {
+	t.Parallel()
+	type ctxKey struct{}
+	ctx := context.WithValue(context.Background(), ctxKey{}, "watch")
+
+	for _, mode := range []resolve.Mode{resolve.ModeAuto, resolve.ModeLocal} {
+		t.Run(string(mode)+" starts the local notifications", func(t *testing.T) {
+			t.Parallel()
+			n := &notifying{fake: local(model.StatePlaying), ch: make(chan struct{})}
+			r := &resolve.Resolver{Mode: mode, Local: n, Web: web(model.StatePlaying)}
+			ch, err := r.Changes(ctx)
+			if err != nil || ch != (<-chan struct{})(n.ch) {
+				t.Fatalf("Changes = %v, %v; want the local channel", ch, err)
+			}
+			if n.ctx != ctx {
+				t.Error("Changes did not pass the caller's context")
+			}
+		})
+	}
+
+	t.Run("a failing start is returned", func(t *testing.T) {
+		t.Parallel()
+		boom := errors.New("no bus")
+		r := &resolve.Resolver{Mode: resolve.ModeAuto, Local: &notifying{fake: local(model.StatePlaying), err: boom}}
+		if ch, err := r.Changes(ctx); ch != nil || !errors.Is(err, boom) {
+			t.Errorf("Changes = %v, %v; want nil and %v", ch, err, boom)
+		}
+	})
+
+	tests := []struct {
+		name  string
+		mode  resolve.Mode
+		local backend.Backend
+	}{
+		{"web mode reads no local source", resolve.ModeWeb, &notifying{fake: local(model.StatePlaying), ch: make(chan struct{})}},
+		{"a local backend without notifications", resolve.ModeAuto, local(model.StatePlaying)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := &resolve.Resolver{Mode: tc.mode, Local: tc.local, Web: web(model.StatePlaying)}
+			if ch, err := r.Changes(ctx); ch != nil || err == nil {
+				t.Errorf("Changes = %v, %v; want nil and an error", ch, err)
+			}
+			if n, ok := tc.local.(*notifying); ok && n.ctx != nil {
+				t.Error("web mode started the local notifications")
+			}
+		})
+	}
+}

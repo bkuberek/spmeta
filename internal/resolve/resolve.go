@@ -3,6 +3,7 @@ package resolve
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/bkuberek/spmeta/internal/backend"
@@ -43,6 +44,22 @@ func (r *Resolver) Static() error {
 		return &backend.Error{Kind: backend.KindNotAvailable, Source: model.SourceWeb, Message: msgNotLoggedIn, Hint: hintLogin}
 	}
 	return nil
+}
+
+// Changes implements backend.Notifier. In auto and local modes it starts the
+// local backend's notifications; a change it announces makes the next Read
+// consult the sources as usual. The Web API announces nothing, so web mode,
+// like a local backend without notifications, returns an error and leaves
+// the caller polling.
+func (r *Resolver) Changes(ctx context.Context) (<-chan struct{}, error) {
+	if r.Mode == ModeWeb {
+		return nil, errors.New("the Web API sends no change notifications")
+	}
+	n, ok := r.Local.(backend.Notifier)
+	if !ok {
+		return nil, errors.New("the local backend sends no change notifications")
+	}
+	return n.Changes(ctx)
 }
 
 // Read returns the current item per ADR 0005, or the highest-precedence error

@@ -25,6 +25,9 @@ func (b *Backend) Read(ctx context.Context) (model.NowPlaying, error)
 
 // Players is used by doctor: every MPRIS player found, with the one Read would select.
 func (b *Backend) Players(ctx context.Context) ([]PlayerInfo, error)
+
+// Changes implements backend.Notifier for watch mode (see Change notifications).
+func (b *Backend) Changes(ctx context.Context) (<-chan struct{}, error)
 ```
 
 `PlayerInfo` has `Name` (the bus name suffix), `Status` (`PlaybackStatus`, empty when the player did not answer), and `Selected`. `DialFunc` receives the context of the whole read, which stays live until `Read` returns, so an adapter may tie the connection to it; `Read` itself bounds the dial by the 500 ms connect timeout and closes a connection that arrives late. A `*backend.Error` returned by the dial passes through unchanged; any other dial error becomes `NotAvailable` "could not reach the D-Bus session bus".
@@ -175,6 +178,29 @@ One-shot reads against Spotify desktop therefore report null whenever it reports
 | `ListNames` | 500 ms |
 | `GetAll`, per player | 500 ms; a timeout skips that player |
 | Whole read | 2 s |
+| Signal subscription (`AddMatch` calls) | 500 ms; a timeout leaves watch mode polling |
+
+## Change notifications
+
+`Changes` lets watch mode read as soon as a player changes instead of waiting for the next poll. It opens one connection of its own with the same `DialFunc`, separate from the connection each `Read` opens, and keeps it until the watch context ends. It returns a channel that receives a value when a change may have happened and closes when the connection ends or drops.
+
+The connection subscribes with two match rules:
+
+| Signal | Rule | Announces |
+| --- | --- | --- |
+| `org.freedesktop.DBus.Properties.PropertiesChanged` | `path=/org/mpris/MediaPlayer2`, `arg0=org.mpris.MediaPlayer2.Player` | A new track, a state change, or other Player property changes |
+| `org.freedesktop.DBus.NameOwnerChanged` | `sender=org.freedesktop.DBus`, `path=/org/freedesktop/DBus`, `arg0namespace=org.mpris.MediaPlayer2` | A player starting or quitting |
+
+Rules:
+
+- Any matching signal wakes the watch loop, whichever player sent it. Player selection stays in `Read`, and the watch loop prints nothing when the output did not change, so a signal from another player costs one read and no output.
+- godbus also delivers the signals the bus addresses to the connection itself, such as `NameAcquired` for its own unique name, whatever the match rules say. The adapter therefore keeps only `PropertiesChanged` and `NameOwnerChanged`; the integration test caught the stray `NameAcquired` wake.
+- The adapter registers its signal channel before adding the rules, so no signal is lost in between, and passes it through `backend.Coalesce`: at most one wake is pending, so a burst of signals costs one read.
+- `PropertiesChanged` never announces `Position` ([linux-mpris.md](../research/linux-mpris.md)), so progress still comes from polling.
+- A connection or subscription error is returned, and watch mode falls back to polling. Errors from the dial pass through the same mapping as `Read` (for example `NotAvailable` "no D-Bus session bus found").
+- When the connection drops, for example because the session bus restarts, the channel closes and watch mode polls for the rest of the run. `Changes` does not reconnect.
+
+The wake is not delayed to wait for related signals. Players may send separate signals for one change: ncspot emits `PlaybackStatus` and `Metadata` as separate `PropertiesChanged` signals, each from its own command, and its property getters read live state ([ncspot `src/mpris.rs`](https://github.com/hrkfdn/ncspot/blob/main/src/mpris.rs)). A read after the first signal takes a full `GetAll` snapshot. If the player has updated only part of its state at that moment, the next signal wakes another read 100 ms later (the watch loop's minimum gap between a read and one a wake starts), and the watch loop prints the corrected line. A debounce would add its delay to every change to save that rare intermediate line; the gap delays only a read that follows another within 100 ms.
 
 ## Edge cases
 
@@ -199,6 +225,8 @@ Task T7 adds `internal/backend/mpris/integration_test.go` with build tag `integr
 4. Runs `Backend.Read` and compares the JSON output with the golden files that the fake-bus tests use.
 
 It also covers `Players`, an empty bus, an unreachable address, and no address at all (`NotAvailable`, no autolaunch).
+
+For `Changes`, the mock player emits `PropertiesChanged` when a property is set. The test checks that a `PlaybackStatus` change and an MPRIS player appearing or quitting each wake the channel, that a change on the root interface `org.mpris.MediaPlayer2` and a name outside the `org.mpris.MediaPlayer2` namespace do not (each given 100 ms), and that the channel closes when the context ends. Removing either `arg0` rule fails the test.
 
 CI runs it on `ubuntu-latest` after `sudo apt-get install -y dbus-daemon`:
 

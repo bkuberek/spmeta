@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	"github.com/bkuberek/spmeta/internal/cli"
 	"github.com/bkuberek/spmeta/internal/config"
 	"github.com/bkuberek/spmeta/internal/model"
+	"github.com/bkuberek/spmeta/internal/watch"
 	"github.com/bkuberek/spmeta/schema"
 )
 
@@ -52,11 +54,23 @@ type watchRun struct {
 	local, web     *scriptedBackend
 }
 
+// notifyingBackend adds change notifications to a scripted backend.
+type notifyingBackend struct {
+	*scriptedBackend
+	changes func(ctx context.Context) (<-chan struct{}, error)
+}
+
+func (b notifyingBackend) Changes(ctx context.Context) (<-chan struct{}, error) {
+	return b.changes(ctx)
+}
+
 type watchSetup struct {
 	local, web []wstep
 	vars       map[string]string
 	files      map[string]string
 	stdout     func(*bytes.Buffer) io.Writer
+	// changes, when set, makes the local backend a backend.Notifier.
+	changes func(ctx context.Context) (<-chan struct{}, error)
 }
 
 func runWatch(t *testing.T, s watchSetup, args ...string) watchRun {
@@ -64,7 +78,11 @@ func runWatch(t *testing.T, s watchSetup, args ...string) watchRun {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := watchRun{local: &scriptedBackend{src: model.SourceMacOS, steps: s.local, cancel: cancel}}
-	opts := []cli.Option{cli.WithBackend(r.local)}
+	var local backend.Backend = r.local
+	if s.changes != nil {
+		local = notifyingBackend{r.local, s.changes}
+	}
+	opts := []cli.Option{cli.WithBackend(local)}
 	if s.web != nil {
 		r.web = &scriptedBackend{src: model.SourceWeb, steps: s.web, cancel: cancel}
 		opts = append(opts, cli.WithWebBackend(r.web))
@@ -378,6 +396,67 @@ func TestWatchUsageErrors(t *testing.T) {
 			}
 			if r.local.calls != 0 {
 				t.Errorf("backend read %d times before the usage error", r.local.calls)
+			}
+		})
+	}
+}
+
+func TestWatchReadsChangeBeforeTheInterval(t *testing.T) {
+	var notifierCtx context.Context
+	r := runWatch(t, watchSetup{
+		local: []wstep{{np: playing()}, titled("Second", model.StatePlaying)},
+		changes: func(ctx context.Context) (<-chan struct{}, error) {
+			notifierCtx = ctx
+			wake := make(chan struct{}, 1)
+			wake <- struct{}{} // the player signalled during the first read
+			return wake, nil
+		},
+	}, "--watch", "--source", "local")
+	if r.code != 0 || r.stderr != "" {
+		t.Fatalf("exit %d, stderr %q", r.code, r.stderr)
+	}
+	if want := playingText + "▶ Second — Alvan · Home (2:00 / 3:58)\n"; r.stdout != want {
+		t.Errorf("stdout = %q, want %q", r.stdout, want)
+	}
+	// The change is read after the minimum gap; then the next wait is the
+	// gap plus the rest of the interval.
+	gap := watch.MinWakeGap
+	if want := []time.Duration{gap, gap, time.Second - gap}; !slices.Equal(r.sleeps, want) {
+		t.Errorf("sleeps = %v, want %v: the change must be read after the gap, not the interval", r.sleeps, want)
+	}
+	if notifierCtx == nil || notifierCtx.Err() == nil {
+		t.Error("the notifier must be stopped when watch returns")
+	}
+}
+
+func TestWatchPollsWhenNotificationsFail(t *testing.T) {
+	failing := func(context.Context) (<-chan struct{}, error) {
+		return nil, errors.New("no D-Bus session bus found")
+	}
+	tests := []struct {
+		name      string
+		args      []string
+		wantDebug bool
+	}{
+		{"silent without debug", []string{"--watch"}, false},
+		{"logged with debug", []string{"--watch", "--debug"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := runWatch(t, watchSetup{local: []wstep{{np: playing()}, {np: playing()}}, changes: failing}, tc.args...)
+			if r.code != 0 || r.stdout != playingText {
+				t.Fatalf("exit %d, stdout %q; want 0 and one line", r.code, r.stdout)
+			}
+			if want := []time.Duration{time.Second, time.Second}; !slices.Equal(r.sleeps, want) {
+				t.Errorf("sleeps = %v, want %v", r.sleeps, want)
+			}
+			logged := strings.Contains(r.stderr, "change notifications unavailable") &&
+				strings.Contains(r.stderr, "no D-Bus session bus found")
+			if logged != tc.wantDebug {
+				t.Errorf("stderr = %q; want the failure logged: %v", r.stderr, tc.wantDebug)
+			}
+			if !tc.wantDebug && r.stderr != "" {
+				t.Errorf("stderr = %q, want nothing without --debug", r.stderr)
 			}
 		})
 	}
