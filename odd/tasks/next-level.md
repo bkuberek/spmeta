@@ -41,7 +41,7 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
 - [ ] N5 — Event-driven `watch` on macOS, plus ADR 0010.
   - Approach under probe: a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged` (no cgo, no new dependency). Listener never sends Apple events to Spotify, so it never launches it.
   - Acceptance: ADR 0010 records the event design for both platforms; listener lifecycle is tied to the watch context; falls back to polling when the listener fails.
-- [ ] N6 — AUR and Nix distribution.
+- [x] N6 — AUR and Nix distribution.
   - Acceptance: goreleaser `aurs` (package `spmeta-bin`) and `nix` (NUR repository) sections that skip upload when their secret is missing; `release-check` passes; README install section and `docs/design/release.md` updated; user setup steps listed.
 - [ ] N7 — README demo GIF.
   - Acceptance: a VHS tape in `docs/assets/demo.tape` and the rendered `docs/assets/demo.gif` showing `spmeta`, `--format json`, and `--watch`; user reviews the GIF before commit.
@@ -69,6 +69,7 @@ Strategy: `single-pr` (standing decision). Forecast: roughly 1,500 to 2,000 auth
 - N2 (delegated writer; risk high → verifier PASS against Waybar source and wiki; two doc nits fixed by the parent): `--format waybar` with Pango escaping, `examples/` for Waybar, SketchyBar, tmux. Live output checked on macOS. Commit 76ed0fc.
 - N3 (delegated writer; risk high → verifier PASS; three wording fixes by the parent): `internal/reference` drives help, completions, and `spmeta(1)`; `spmeta completion bash|zsh|fish`; `internal/docgen` runs as a goreleaser before hook into `dist-extras/`; archives, .deb, .rpm, and cask ship them (zsh path per packager). `goreleaser check` and snapshot pass in Docker; .deb and .rpm installs verified in Debian and Fedora containers. Help now lists `--watch` and `--interval`.
 - N4 (delegated writer; risk high → verifier PASS, then two follow-ups by the same writer): `backend.Notifier` and `Coalesce`; watch waits can be woken (`Wake`, `MinWakeGap` 100 ms flood guard; Retry-After and backoff waits cannot be shortened; a closed channel falls back to polling); `Resolver.Changes` passes through to the local backend; MPRIS notifier on one persistent godbus connection (PropertiesChanged and NameOwnerChanged, signal-name filter for godbus unicast signals). Real-bus integration test in the golang container passes. No reconnect after a session-bus restart (documented).
+- N6 (delegated writer; risk high → verifier PASS with empty secrets in a scratch non-snapshot release; three doc fixes by the parent): goreleaser `aurs` (`spmeta-bin`) and `nix` (`bkuberek/nur-packages`) gated by `skip_upload` on `AUR_KEY` and `NUR_GITHUB_TOKEN`; release.yml passes both secrets. Publish order in v2.19.0: GitHub Release, Nix, cask, AUR. User setup steps are in `docs/design/release.md#aur-and-nix-one-time-setup`.
 - macOS notification probe: listener registers, but two runs (5 and 10 minutes) saw no events while Spotify was paused. Needs a live play/skip by the user before N5.
 
 ## Next step

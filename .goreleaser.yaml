@@ -74,6 +74,61 @@ nfpms:
         file_info:
           mode: 0644
 
+aurs:
+  - name: spmeta-bin
+    homepage: https://github.com/bkuberek/spmeta
+    description: Now-playing metadata for Spotify
+    license: MIT
+    maintainers:
+      - "Bastian Kuberek <bastian@bkuberek.com>"
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: ssh://aur@aur.archlinux.org/spmeta-bin.git
+    # Skip the push, and keep the generated PKGBUILD in dist/, until the AUR
+    # key is configured.
+    skip_upload: '{{ if not (index .Env "AUR_KEY") }}true{{ end }}'
+    provides: [spmeta]
+    conflicts: [spmeta]
+    commit_author:
+      name: Bastian Kuberek
+      email: bastian@bkuberek.com
+    package: |-
+      # binary
+      install -Dm755 "./spmeta" "${pkgdir}/usr/bin/spmeta"
+
+      # license
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/spmeta-bin/LICENSE"
+
+      # completions
+      install -Dm644 "./completions/spmeta.bash" "${pkgdir}/usr/share/bash-completion/completions/spmeta"
+      install -Dm644 "./completions/spmeta.zsh" "${pkgdir}/usr/share/zsh/site-functions/_spmeta"
+      install -Dm644 "./completions/spmeta.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/spmeta.fish"
+
+      # man page
+      install -Dm644 "./manpages/spmeta.1.gz" "${pkgdir}/usr/share/man/man1/spmeta.1.gz"
+
+nix:
+  - name: spmeta
+    repository:
+      owner: bkuberek
+      name: nur-packages
+      branch: main
+      token: "{{ .Env.NUR_GITHUB_TOKEN }}"
+    path: pkgs/spmeta/default.nix
+    homepage: https://github.com/bkuberek/spmeta
+    description: Now-playing metadata for Spotify
+    license: mit
+    main_program: spmeta
+    # Skip the push, and keep the generated derivation in dist/, until the
+    # NUR token is configured.
+    skip_upload: '{{ if not (index .Env "NUR_GITHUB_TOKEN") }}true{{ end }}'
+    commit_author:
+      name: Bastian Kuberek
+      email: bastian@bkuberek.com
+    extra_install: |-
+      installManPage ./manpages/spmeta.1.gz
+    post_install: |-
+      installShellCompletion ./completions/*
+
 homebrew_casks:
   - name: spmeta
     binaries: [spmeta]

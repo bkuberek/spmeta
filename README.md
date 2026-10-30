@@ -30,6 +30,24 @@ sudo apt install ./spmeta_0.1.0_linux_amd64.deb
 sudo dnf install ./spmeta_0.1.0_linux_amd64.rpm
 ```
 
+**Arch Linux** (AUR) installs the prebuilt binary from the `spmeta-bin` package. The package is published by the release workflow, so it exists on the AUR only after the first release that runs with the AUR key configured ([release.md](docs/design/release.md#aur-and-nix-one-time-setup)):
+
+```bash
+yay -S spmeta-bin
+# or
+paru -S spmeta-bin
+```
+
+**Nix** installs the prebuilt binary from the `bkuberek` repository in [NUR](https://github.com/nix-community/NUR). It is available after the first release that runs with the NUR token configured and the repository is registered with NUR. With NUR set up as an overlay (see the NUR README), add the package to your configuration or try it without installing:
+
+```nix
+environment.systemPackages = [ pkgs.nur.repos.bkuberek.spmeta ];
+```
+
+```bash
+nix run github:nix-community/NUR#repos.bkuberek.spmeta -- version
+```
+
 **Archives** (`.tar.gz` for macOS and Linux, amd64 and arm64) are on the same page, together with `checksums.txt`. Verify a download before you unpack it:
 
 ```bash
@@ -55,7 +73,7 @@ Check the result with `spmeta version`.
 
 ## Shell completion
 
-The Homebrew cask and the `.deb` and `.rpm` packages install completion for bash, zsh, and fish, and the `spmeta(1)` man page. Bash completion needs the `bash-completion` package. Zsh needs `compinit` in `~/.zshrc`; with Homebrew, also add `$(brew --prefix)/share/zsh/site-functions` to `FPATH` before `compinit`, which the macOS system zsh does not do by default. Release archives contain the same files in `completions/` and `manpages/`.
+The Homebrew cask, the `.deb` and `.rpm` packages, and the AUR and Nix packages (once published) install completion for bash, zsh, and fish, and the `spmeta(1)` man page. Bash completion needs the `bash-completion` package. Zsh needs `compinit` in `~/.zshrc`; with Homebrew, also add `$(brew --prefix)/share/zsh/site-functions` to `FPATH` before `compinit`, which the macOS system zsh does not do by default. Release archives contain the same files in `completions/` and `manpages/`.
 
 After `go install`, add the line for your shell to its startup file:
 
