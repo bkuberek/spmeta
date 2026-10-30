@@ -11,12 +11,13 @@ spmeta auth login [--client-id ID] [--port PORT] [--no-browser] [--debug] [--con
 spmeta auth logout [--config PATH]
 spmeta auth status [--config PATH]
 spmeta doctor [--debug] [--config PATH]
+spmeta completion bash|zsh|fish
 spmeta version
 spmeta --version
 spmeta help [COMMAND]
 ```
 
-Parsing uses the Go `flag` package ([ADR 0006](../decisions/0006-dependencies.md)): `-flag` and `--flag` are equivalent, values are given as `--flag value` or `--flag=value`, flags must precede any positional argument, and the only short flag is `-h`. The first argument selects a subcommand when it is `auth`, `doctor`, `version`, or `help`; otherwise all arguments belong to the root read command, which accepts no positional arguments.
+Parsing uses the Go `flag` package ([ADR 0006](../decisions/0006-dependencies.md)): `-flag` and `--flag` are equivalent, values are given as `--flag value` or `--flag=value`, flags must precede any positional argument, and the only short flag is `-h`. The first argument selects a subcommand when it is `auth`, `doctor`, `completion`, `version`, or `help`; otherwise all arguments belong to the root read command, which accepts no positional arguments.
 
 Web mode ([ADR 0004](../decisions/0004-web-api-built-last.md)) is on only while a token file exists, which `spmeta auth login` creates. Without one, `auto` skips Web without a request, and `--source web` exits 4 with "not logged in to the Spotify Web API" and the hint "Run `spmeta auth login`."
 
@@ -150,7 +151,7 @@ Complete Waybar configuration and styling files are in [examples/waybar](../../e
 
 | Code | Meaning |
 | --- | --- |
-| 0 | An item is playing, paused, or loaded; output written. Also: watch mode stopped by SIGINT or SIGTERM; successful `auth`, `doctor`, `version`, `help` |
+| 0 | An item is playing, paused, or loaded; output written. Also: watch mode stopped by SIGINT or SIGTERM; successful `auth`, `doctor`, `completion`, `version`, `help` |
 | 1 | Unexpected error: unparseable source output, network failure, timeout, Web 5xx after one retry |
 | 2 | Usage error (see Root command) |
 | 3 | A source is reachable but nothing is loaded, or no Web device is active |
@@ -256,6 +257,26 @@ The report goes to stdout, one line per check as soon as the check finishes, so 
 
 `doctor` exits 0 when at least one source is usable and 4 otherwise. A source is usable when it is reachable: macOS permission granted, or an MPRIS player selected. A working Web login alone counts: a 204 with no active device is an answer, a rejected login or a 403 is not. On exit 4 it prints `spmeta: no source is available` and a `hint:` line on stderr after the report.
 
+### completion
+
+`spmeta completion SHELL` prints the completion script for `bash`, `zsh`, or `fish` on stdout and exits 0. The scripts are static, so they never run `spmeta` while you type. They complete the subcommands, the flags of each command, the values of `--source` and `--format`, the shells of `completion`, and the topics of `help`, and they offer file names for `--config`.
+
+| Shell | Load into the current shell | Installed by the `.deb` and `.rpm` packages as |
+| --- | --- | --- |
+| bash | `eval "$(spmeta completion bash)"` | `/usr/share/bash-completion/completions/spmeta` |
+| zsh | `source <(spmeta completion zsh)`, after `compinit` | `/usr/share/zsh/vendor-completions/_spmeta` (`.deb`), `/usr/share/zsh/site-functions/_spmeta` (`.rpm`) |
+| fish | `spmeta completion fish \| source` | `/usr/share/fish/vendor_completions.d/spmeta.fish` |
+
+The bash line uses `eval` because the `source <(...)` form loads nothing in bash 3.2, the version macOS ships. The zsh script also works as an autoloaded `_spmeta` file on `$fpath`. The Homebrew cask installs the same files, and the `spmeta(1)` man page, into the Homebrew prefix ([release.md](./release.md)).
+
+`completion` accepts only `-h`. A missing shell, an unknown shell, or a second argument is a usage error (exit 2):
+
+```text
+spmeta: completion needs a shell: bash, zsh or fish
+spmeta: unsupported shell "tcsh" (want bash, zsh or fish)
+spmeta: unexpected argument "zsh" for completion
+```
+
 ### version
 
 `spmeta version` and `spmeta --version` print one line and exit 0:
@@ -268,7 +289,7 @@ The version comes from `-ldflags "-X main.version=..."` in release builds, or fr
 
 ### help
 
-`spmeta help` prints the synopsis; `spmeta help auth` and `spmeta help doctor` print the subcommand usage. `-h` on any command does the same; `auth login -h`, `auth logout -h` and `auth status -h` print the usage of `auth`.
+`spmeta help` prints the synopsis; `spmeta help auth`, `spmeta help doctor`, and `spmeta help completion` print the subcommand usage. `-h` on any command does the same; `auth login -h`, `auth logout -h` and `auth status -h` print the usage of `auth`. Any other topic is a usage error (exit 2).
 
 ## Environment variables
 

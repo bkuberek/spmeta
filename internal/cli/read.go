@@ -97,23 +97,39 @@ func WithBrowserOpener(f func(url string) error) Option {
 // bytes written to stdout.
 type renderFunc func(np *model.NowPlaying) ([]byte, error)
 
-func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info BuildInfo, opts options) int {
+// rootFlags are the flags of the root command. internal/reference documents
+// them, and a test keeps the two in step.
+type rootFlags struct {
+	set                                              *flag.FlagSet
+	showVersion, watch, quiet, debug                 *bool
+	source, formatName, tmplText, player, configFile *string
+	interval                                         *float64
+}
+
+func newRootFlags() rootFlags {
 	fs := flag.NewFlagSet("spmeta", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	showVersion := fs.Bool("version", false, "")
-	source := fs.String("source", "", "")
-	formatName := fs.String("format", "", "")
-	tmplText := fs.String("template", "", "")
-	player := fs.String("player", "", "")
-	configFile := fs.String("config", "", "")
-	interval := fs.Float64("interval", 0, "")
-	watch := fs.Bool("watch", false, "")
-	quiet := fs.Bool("quiet", false, "")
-	debug := fs.Bool("debug", false, "")
+	return rootFlags{
+		set:         fs,
+		showVersion: fs.Bool("version", false, ""),
+		source:      fs.String("source", "", ""),
+		formatName:  fs.String("format", "", ""),
+		tmplText:    fs.String("template", "", ""),
+		player:      fs.String("player", "", ""),
+		configFile:  fs.String("config", "", ""),
+		interval:    fs.Float64("interval", 0, ""),
+		watch:       fs.Bool("watch", false, ""),
+		quiet:       fs.Bool("quiet", false, ""),
+		debug:       fs.Bool("debug", false, ""),
+	}
+}
 
+func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info BuildInfo, opts options) int {
+	f := newRootFlags()
+	fs := f.set
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			printUsage(stdout)
+			printHelp(stdout, "")
 			return exitOK
 		}
 		if name, ok := strings.CutPrefix(err.Error(), "flag provided but not defined: -"); ok {
@@ -128,26 +144,26 @@ func runRoot(ctx context.Context, args []string, stdout, stderr io.Writer, info 
 	if fs.NArg() > 0 {
 		return usageError(stderr, "unknown command %q", fs.Arg(0))
 	}
-	if *showVersion {
+	if *f.showVersion {
 		printVersion(stdout, info)
 		return exitOK
 	}
 
-	flags := config.Flags{Watch: *watch, Quiet: *quiet, Debug: *debug}
-	fs.Visit(func(f *flag.Flag) {
-		switch f.Name {
+	flags := config.Flags{Watch: *f.watch, Quiet: *f.quiet, Debug: *f.debug}
+	fs.Visit(func(given *flag.Flag) {
+		switch given.Name {
 		case "source":
-			flags.Source = source
+			flags.Source = f.source
 		case "format":
-			flags.Format = formatName
+			flags.Format = f.formatName
 		case "template":
-			flags.Template = tmplText
+			flags.Template = f.tmplText
 		case "player":
-			flags.Player = player
+			flags.Player = f.player
 		case "config":
-			flags.Config = configFile
+			flags.Config = f.configFile
 		case "interval":
-			flags.Interval = interval
+			flags.Interval = f.interval
 		}
 	})
 	settings, err := config.Load(flags, opts.env)

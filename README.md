@@ -53,6 +53,28 @@ go install github.com/bkuberek/spmeta/cmd/spmeta@latest
 
 Check the result with `spmeta version`.
 
+## Shell completion
+
+The Homebrew cask and the `.deb` and `.rpm` packages install completion for bash, zsh, and fish, and the `spmeta(1)` man page. Bash completion needs the `bash-completion` package. Zsh needs `compinit` in `~/.zshrc`; with Homebrew, also add `$(brew --prefix)/share/zsh/site-functions` to `FPATH` before `compinit`, which the macOS system zsh does not do by default. Release archives contain the same files in `completions/` and `manpages/`.
+
+After `go install`, add the line for your shell to its startup file:
+
+```bash
+# ~/.bashrc
+eval "$(spmeta completion bash)"
+
+# ~/.zshrc, after compinit
+source <(spmeta completion zsh)
+```
+
+For fish, save the script where fish loads completions on demand:
+
+```bash
+spmeta completion fish > ~/.config/fish/completions/spmeta.fish
+```
+
+The scripts complete subcommands, flags, and the values of `--source` and `--format`. See [docs/design/cli.md](docs/design/cli.md#completion) for the details.
+
 ## Usage
 
 ```bash
@@ -112,7 +134,7 @@ When nothing is playing, text and template output are empty, JSON prints `null`,
 
 | Code | Meaning |
 | --- | --- |
-| 0 | An item is playing, paused, or loaded; output written. Also: watch mode stopped by SIGINT or SIGTERM; successful `auth`, `doctor`, `version`, `help` |
+| 0 | An item is playing, paused, or loaded; output written. Also: watch mode stopped by SIGINT or SIGTERM; successful `auth`, `doctor`, `completion`, `version`, `help` |
 | 1 | Unexpected error: unparseable source output, network failure, timeout, Web 5xx after one retry |
 | 2 | Usage error |
 | 3 | A source is reachable but nothing is loaded, or no Web device is active |

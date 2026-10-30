@@ -14,13 +14,21 @@ The module path is `github.com/bkuberek/spmeta`. All packages except `cmd/spmeta
 cmd/spmeta/
   main.go                 # version vars (set by -ldflags), signal context, os.Exit(cli.Run(...))
 internal/cli/
-  cli.go                  # Run: dispatch to read, auth, doctor, version, help
+  cli.go                  # Run: dispatch to read, auth, doctor, completion, version, help
   read.go                 # root command: flags, resolver, formatter, watch
   auth.go                 # auth login|logout|status
   web.go                  # Web backend over the token file, throttle, doctor report
   doctor.go               # doctor command
-  usage.go                # usage text, UsageError (exit 2)
+  completion.go           # completion bash|zsh|fish
+  usage.go                # help output from internal/reference, UsageError (exit 2)
   exit.go                 # error printing and exit-code mapping
+internal/reference/
+  reference.go            # commands, flags, values, exit codes: the source for help, completions, man page
+  help.go                 # help pages
+  completion.go           # static bash, zsh, and fish completion scripts
+  man.go                  # spmeta(1) in roff
+internal/docgen/
+  main.go                 # release-time generator: completions and man page into dist-extras/
 internal/model/
   nowplaying.go           # NowPlaying, Device, Source, State, ItemType
   normalize.go            # Normalize, ParseURI, OpenURL
@@ -29,6 +37,7 @@ internal/format/
   json.go                 # one-line JSON, "null" for nothing playing
   text.go                 # default text line
   template.go             # {field} mini-syntax: Parse, Render
+  waybar.go               # Waybar custom-module JSON with Pango escaping
 internal/config/
   paths.go                # XDG config dir, config and token paths
   config.go               # TOML file, env, flag merge into Settings

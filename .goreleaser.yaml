@@ -2,6 +2,11 @@
 version: 2
 project_name: spmeta
 
+before:
+  hooks:
+    # Completion scripts and the man page, generated from internal/reference.
+    - go run ./internal/docgen -version {{ .Version }} -date {{ .CommitDate }} dist-extras
+
 builds:
   - id: spmeta
     main: ./cmd/spmeta
@@ -16,7 +21,15 @@ builds:
 archives:
   - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, README.md]
+    files:
+      - LICENSE
+      - README.md
+      - src: dist-extras/completions/*
+        dst: completions
+        strip_parent: true
+      - src: dist-extras/manpages/spmeta.1.gz
+        dst: manpages
+        strip_parent: true
 
 checksum:
   name_template: checksums.txt
@@ -35,10 +48,40 @@ nfpms:
     license: MIT
     formats: [deb, rpm]
     bindir: /usr/bin
+    contents:
+      - src: dist-extras/completions/spmeta.bash
+        dst: /usr/share/bash-completion/completions/spmeta
+        file_info:
+          mode: 0644
+      # No zsh directory is on the default fpath of both families: Debian
+      # reads vendor-completions, Fedora reads site-functions.
+      - src: dist-extras/completions/spmeta.zsh
+        dst: /usr/share/zsh/vendor-completions/_spmeta
+        packager: deb
+        file_info:
+          mode: 0644
+      - src: dist-extras/completions/spmeta.zsh
+        dst: /usr/share/zsh/site-functions/_spmeta
+        packager: rpm
+        file_info:
+          mode: 0644
+      - src: dist-extras/completions/spmeta.fish
+        dst: /usr/share/fish/vendor_completions.d/spmeta.fish
+        file_info:
+          mode: 0644
+      - src: dist-extras/manpages/spmeta.1.gz
+        dst: /usr/share/man/man1/spmeta.1.gz
+        file_info:
+          mode: 0644
 
 homebrew_casks:
   - name: spmeta
     binaries: [spmeta]
+    manpages: [manpages/spmeta.1.gz]
+    completions:
+      bash: completions/spmeta.bash
+      zsh: completions/spmeta.zsh
+      fish: completions/spmeta.fish
     repository:
       owner: bkuberek
       name: homebrew-tap

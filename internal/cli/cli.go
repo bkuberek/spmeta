@@ -5,8 +5,10 @@ package cli
 import (
 	"context"
 	"io"
+	"slices"
 
 	"github.com/bkuberek/spmeta/internal/config"
+	"github.com/bkuberek/spmeta/internal/reference"
 )
 
 // Run executes spmeta with args (without the program name) and returns the
@@ -22,6 +24,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info Buil
 			return exitOK
 		case "help":
 			return runHelp(args[1:], stdout, stderr)
+		case "completion":
+			return runCompletion(args[1:], stdout, stderr)
 		}
 	}
 	o := options{env: config.OSEnv()}
@@ -41,18 +45,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, info Buil
 
 func runHelp(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
-		if len(args) == 1 {
-			switch args[0] {
-			case "auth":
-				printAuthUsage(stdout)
-				return exitOK
-			case "doctor":
-				printDoctorUsage(stdout)
-				return exitOK
-			}
+		if len(args) == 1 && slices.Contains(reference.Topics(), args[0]) {
+			printHelp(stdout, args[0])
+			return exitOK
 		}
 		return usageError(stderr, "no help available for %q", args[0])
 	}
-	printUsage(stdout)
+	printHelp(stdout, "")
 	return exitOK
 }
