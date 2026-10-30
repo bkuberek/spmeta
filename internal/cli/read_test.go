@@ -100,6 +100,40 @@ func TestReadJSON(t *testing.T) {
 	}
 }
 
+func TestReadWaybar(t *testing.T) {
+	const want = `{"text":"▶ Amazone — Alvan · Home (2:00 / 3:58)","alt":"playing","tooltip":"Amazone\nAlvan\nHome\nSource: macos","class":"playing","percentage":50}` + "\n"
+	for _, args := range [][]string{
+		{"--format", "waybar"},
+		{"--format=waybar"},
+		{"--format", "waybar", "--template", "{title}"},
+	} {
+		code, stdout, stderr := runWith(t, &fakeBackend{np: playing()}, args...)
+		if code != 0 || stderr != "" || stdout != want {
+			t.Errorf("%v: exit=%d stdout=%q stderr=%q; want 0, %q, no stderr", args, code, stdout, stderr, want)
+		}
+	}
+}
+
+func TestReadWaybarNothingPlaying(t *testing.T) {
+	err := &backend.Error{Kind: backend.KindNothingPlaying, Message: "nothing is playing"}
+	code, stdout, stderr := runWith(t, &fakeBackend{err: err}, "--format", "waybar")
+	if want := `{"text":"","alt":"none","class":"none"}` + "\n"; code != 3 || stdout != want || stderr != "spmeta: nothing is playing\n" {
+		t.Errorf("exit=%d stdout=%q stderr=%q; want 3, %q and the usual message", code, stdout, stderr, want)
+	}
+	code, stdout, stderr = runWith(t, &fakeBackend{err: err}, "--format", "waybar", "--quiet")
+	if code != 3 || stdout != "" || stderr != "" {
+		t.Errorf("quiet: exit=%d stdout=%q stderr=%q; want 3 and nothing", code, stdout, stderr)
+	}
+}
+
+func TestReadWaybarOtherErrorsPrintNothing(t *testing.T) {
+	err := &backend.Error{Kind: backend.KindNotAvailable, Message: "Spotify is not running"}
+	code, stdout, _ := runWith(t, &fakeBackend{err: err}, "--format", "waybar")
+	if code != 4 || stdout != "" {
+		t.Errorf("exit=%d stdout=%q; want 4 and empty", code, stdout)
+	}
+}
+
 func TestReadErrorKinds(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -24,6 +24,7 @@ const (
 	formatText     = "text"
 	formatJSON     = "json"
 	formatTemplate = "template"
+	formatWaybar   = "waybar"
 )
 
 // Warnings print as "spmeta: warning: <text>" on stderr.
@@ -253,6 +254,8 @@ func newRenderer(s config.Settings) (renderFunc, error) {
 		}, nil
 	case formatJSON:
 		return format.JSON, nil
+	case formatWaybar:
+		return format.Waybar, nil
 	case formatTemplate:
 		tpl, err := format.ParseTemplate(s.Template)
 		if err != nil {

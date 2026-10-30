@@ -25,15 +25,15 @@ Commands:
   help      Print this help ('spmeta help doctor' for the doctor flags)
 
 Flags:
-      --source auto|local|web      Source to read (default auto)
-      --format text|json|template  Output format (default text)
-      --template STR               Template for --format template, for example '{artist} - {title}'
-      --player NAME                Preferred MPRIS player (Linux)
-      --config PATH                Read this configuration file instead of the default
-      --quiet                      Print nothing; only set the exit code
-      --debug                      Write diagnostics to stderr
-  -h, --help                       Print this help
-      --version                    Print version and build information
+      --source auto|local|web             Source to read (default auto)
+      --format text|json|template|waybar  Output format (default text)
+      --template STR                      Template for --format template, for example '{artist} - {title}'
+      --player NAME                       Preferred MPRIS player (Linux)
+      --config PATH                       Read this configuration file instead of the default
+      --quiet                             Print nothing; only set the exit code
+      --debug                             Write diagnostics to stderr
+  -h, --help                              Print this help
+      --version                           Print version and build information
 
 Environment: SPMETA_SOURCE, SPMETA_FORMAT, SPMETA_TEMPLATE, SPMETA_PLAYER, SPMETA_CONFIG.
 Configuration: $XDG_CONFIG_HOME/spmeta/config.toml, else ~/.config/spmeta/config.toml.

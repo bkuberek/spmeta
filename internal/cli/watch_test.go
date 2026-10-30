@@ -154,6 +154,28 @@ func TestWatchTemplate(t *testing.T) {
 	}
 }
 
+func TestWatchWaybar(t *testing.T) {
+	paused := playing()
+	paused.State = model.StatePaused
+	r := runWatch(t, watchSetup{local: []wstep{
+		{err: errNotRunning},
+		{np: playing()},
+		{np: paused},
+		{err: &backend.Error{Kind: backend.KindNothingPlaying, Message: "nothing"}},
+		{np: playing()},
+	}}, "--watch", "--format", "waybar")
+	const none = `{"text":"","alt":"none","class":"none"}` + "\n"
+	const tooltip = `"tooltip":"Amazone\nAlvan\nHome\nSource: macos"`
+	want := none +
+		`{"text":"▶ Amazone — Alvan · Home (2:00 / 3:58)","alt":"playing",` + tooltip + `,"class":"playing","percentage":50}` + "\n" +
+		`{"text":"⏸ Amazone — Alvan · Home (2:00 / 3:58)","alt":"paused",` + tooltip + `,"class":"paused","percentage":50}` + "\n" +
+		none +
+		`{"text":"▶ Amazone — Alvan · Home (2:00 / 3:58)","alt":"playing",` + tooltip + `,"class":"playing","percentage":50}` + "\n"
+	if r.code != 0 || r.stdout != want || r.stderr != "" {
+		t.Errorf("exit %d, stdout %q, stderr %q; want exit 0, stdout %q, no stderr", r.code, r.stdout, r.stderr, want)
+	}
+}
+
 func TestWatchNDJSON(t *testing.T) {
 	amp := playing()
 	amp.Title = ptr("Fish & <Chips>")
