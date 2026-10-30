@@ -1,0 +1,19 @@
+// Merge this into ~/.config/waybar/config.jsonc, or copy the "custom/spotify"
+// block into your existing configuration and add it to a modules list.
+//
+// Do not set "escape": true. spmeta already escapes the Pango markup in
+// "text" and "tooltip", and Waybar would escape it a second time.
+{
+  "layer": "top",
+  "modules-right": ["custom/spotify"],
+
+  "custom/spotify": {
+    // Prints one JSON line on every change, including when nothing plays.
+    "exec": "spmeta --watch --format waybar",
+    "return-type": "json",
+    // "{}" shows the "text" key. An empty text hides the module.
+    "format": "{}",
+    "max-length": 60,
+    "tooltip": true
+  }
+}

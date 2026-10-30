@@ -29,13 +29,13 @@ const (
 
 var (
 	sources = []string{"auto", "local", "web"}
-	formats = []string{"text", "json", "template"}
+	formats = []string{"text", "json", "template", "waybar"}
 )
 
 // Settings is the resolved configuration for one run.
 type Settings struct {
 	Source string // auto | local | web
-	Format string // text | json | template
+	Format string // text | json | template | waybar
 
 	Template       string
 	TemplateOrigin string // where Template came from, for error messages; empty when unset

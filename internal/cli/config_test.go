@@ -52,6 +52,8 @@ func TestConfigLayersDriveOutput(t *testing.T) {
 		{"file template with file format", nil, map[string]string{defaultConf: "default_format = \"template\"\ntemplate = \"{artist}\""}, nil, func(s string) bool { return s == "Alvan\n" }},
 		{"template flag beats json env", map[string]string{"SPMETA_FORMAT": "json"}, nil, []string{"--template", "{album}"}, func(s string) bool { return s == "Home\n" }},
 		{"env template alone stays text", map[string]string{"SPMETA_TEMPLATE": "{title}"}, nil, nil, func(s string) bool { return s == playingText }},
+		{"env waybar", map[string]string{"SPMETA_FORMAT": "waybar"}, nil, nil, func(s string) bool { return strings.HasPrefix(s, `{"text":"▶ Amazone`) }},
+		{"file waybar", nil, map[string]string{defaultConf: `default_format = "waybar"`}, nil, func(s string) bool { return strings.HasPrefix(s, `{"text":"▶ Amazone`) }},
 		{"config flag path", nil, map[string]string{"/etc/alt.toml": `default_format = "json"`}, []string{"--config", "/etc/alt.toml"}, func(s string) bool { return strings.HasPrefix(s, "{") }},
 		{"config env path", map[string]string{"SPMETA_CONFIG": "/etc/alt.toml"}, map[string]string{"/etc/alt.toml": `default_format = "json"`, defaultConf: `default_format = "text"`}, nil, func(s string) bool { return strings.HasPrefix(s, "{") }},
 	}

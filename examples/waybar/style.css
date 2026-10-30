@@ -1,0 +1,24 @@
+/* Append this to ~/.config/waybar/style.css.
+   spmeta sets the module's CSS class to playing, paused, stopped, or none. */
+
+#custom-spotify {
+  padding: 0 10px;
+}
+
+#custom-spotify.playing {
+  color: #a6e3a1;
+}
+
+#custom-spotify.paused {
+  color: #9399b2;
+}
+
+#custom-spotify.stopped {
+  color: #6c7086;
+}
+
+/* The module is hidden when nothing plays; this keeps it quiet if it shows. */
+#custom-spotify.none {
+  color: transparent;
+  padding: 0;
+}

@@ -5,7 +5,7 @@ This document defines the complete command-line surface of `spmeta`: commands, f
 ## Synopsis
 
 ```text
-spmeta [--source auto|local|web] [--format text|json|template] [--template STR]
+spmeta [--source auto|local|web] [--format text|json|template|waybar] [--template STR]
        [--player NAME] [--watch] [--interval SECONDS] [--quiet] [--debug] [--config PATH]
 spmeta auth login [--client-id ID] [--port PORT] [--no-browser] [--debug] [--config PATH]
 spmeta auth logout [--config PATH]
@@ -27,7 +27,7 @@ The root command reads the current item once, prints it, and exits; with `--watc
 | Flag | Values | Default | Description |
 | --- | --- | --- | --- |
 | `--source` | `auto`, `local`, `web` | `auto` | Source selection ([ADR 0005](../decisions/0005-auto-source-resolution.md)) |
-| `--format` | `text`, `json`, `template` | `text` | Output format. Passing `--template` on the command line without `--format` selects `template` |
+| `--format` | `text`, `json`, `template`, `waybar` | `text` | Output format. Passing `--template` on the command line without `--format` selects `template`; an explicit `--format` other than `template` ignores `--template` |
 | `--template` | string | none | Template for `--format template` (see Template syntax) |
 | `--player` | string | none | MPRIS player name or bus-name suffix (Linux). Ignored by other backends, with a `--debug` note |
 | `--watch` | flag | off | Keep running; print a line only when the item or state changes |
@@ -117,6 +117,34 @@ The `{field}` syntax was chosen over Go `text/template` for four reasons:
 2. It is shell-friendly: `--template '{artist} - {title}'` needs no `{{.Artist}}` quoting.
 3. `text/template` prints `<no value>` for missing map keys and reports errors only at execution time; the mini-syntax validates field names before reading.
 4. Conditionals and functions would make templates a second API surface to keep stable. Scripts that need logic use `--format json` with `jq`.
+
+### Waybar
+
+`--format waybar` prints one compact JSON object per line, in the shape that a Waybar custom module reads when `return-type` is `json`. It does not use `--template`.
+
+```json
+{"text":"▶ Amazone — Alvan · Home (2:00 / 3:58)","alt":"playing","tooltip":"Amazone\nAlvan\nHome\nSource: macos","class":"playing","percentage":50}
+```
+
+| Key | Content | Omitted when |
+| --- | --- | --- |
+| `text` | The line that `--format text` prints for the same item | Never; empty when nothing is playing |
+| `alt` | `playing`, `paused`, or `stopped`; `none` when nothing is playing | Never |
+| `tooltip` | Lines separated by `\n`: title, artists joined with `", "`, album, and `Source: {source}`. A null artist or album leaves out its line; a null title shows as in text output | Nothing is playing |
+| `class` | Same value as `alt` | Never |
+| `percentage` | `position_ms` as a whole percent of `duration_ms`, rounded down, from 0 to 100 | `position_ms` or `duration_ms` is null |
+
+Waybar parses `text` and `tooltip` as Pango markup, so `spmeta` replaces `&`, `<`, and `>` in both with `&amp;`, `&lt;`, and `&gt;`. Do not set Waybar's `escape` option on the module, because it would escape the text a second time and show `&amp;` literally. Quotes need no escaping in markup text and stay as they are. As in text output, newlines, carriage returns, and tabs inside field values become one space each and other control characters are dropped, so only the `\n` separators split the tooltip.
+
+When nothing is playing, or no source is available in watch mode, the line is:
+
+```json
+{"text":"","alt":"none","class":"none"}
+```
+
+An empty `text` makes Waybar hide the module. Exit codes are the same as for the other formats: a one-shot read that finds nothing playing prints this line and exits 3, and other errors print nothing on stdout. In watch mode the line is printed for each change, including the change to nothing playing, so the module clears.
+
+Complete Waybar configuration and styling files are in [examples/waybar](../../examples/waybar/).
 
 ## Exit codes
 
@@ -250,7 +278,7 @@ Environment variables override the configuration file; flags override both.
 | --- | --- | --- |
 | `SPMETA_CONFIG` | `--config` | Path to the configuration file |
 | `SPMETA_SOURCE` | `--source` | `auto`, `local`, `web` |
-| `SPMETA_FORMAT` | `--format` | `text`, `json`, `template` |
+| `SPMETA_FORMAT` | `--format` | `text`, `json`, `template`, `waybar` |
 | `SPMETA_TEMPLATE` | `--template` | Template string (does not change the format) |
 | `SPMETA_PLAYER` | `--player` | Player name |
 | `SPMETA_CLIENT_ID` | `--client-id` | Spotify Client ID |
@@ -266,7 +294,7 @@ The configuration file is optional. Its path is, in order of precedence: `--conf
 # ~/.config/spmeta/config.toml
 client_id      = "0123456789abcdef0123456789abcdef"
 default_source = "auto"            # auto | local | web
-default_format = "template"        # text | json | template
+default_format = "template"        # text | json | template | waybar
 template       = "{artist} - {title}"
 player         = "spotifyd"
 interval       = 1.0               # seconds, watch mode, local
@@ -291,7 +319,7 @@ The token file is `token.json` in the same directory as the default configuratio
 
 ## Integration examples
 
-These examples assume `spmeta` is on `PATH`.
+These examples assume `spmeta` is on `PATH`. Copy-paste versions of the tmux, Waybar, and SketchyBar examples are in the [examples](../../examples/README.md) directory.
 
 ### tmux
 
@@ -303,24 +331,20 @@ set -g status-interval 5
 set -g status-right '#(spmeta --template "{state_icon} {artist} - {title}" 2>/dev/null)'
 ```
 
-### Waybar
+### Waybar module
 
-A custom module that updates on each change. Waybar hides a text module whose line is empty, which is what `spmeta` prints when nothing plays:
+A custom module that updates on each change. The `waybar` format sets the text, tooltip, CSS class, and progress of the module, and an empty text hides it when nothing plays. Leave Waybar's `escape` option off, because `spmeta` already escapes Pango markup:
 
 ```json
 "custom/spotify": {
-  "exec": "spmeta --watch --template '{state_icon} {artist} - {title}'",
-  "max-length": 60,
-  "escape": true
+  "exec": "spmeta --watch --format waybar",
+  "return-type": "json",
+  "format": "{}",
+  "max-length": 60
 }
 ```
 
-For Waybar's JSON return type, build the JSON with `jq` instead of a template, so quotes in titles are escaped correctly:
-
-```bash
-spmeta --watch --format json | jq --unbuffered -c \
-  'if . == null then {text: ""} else {text: "\(.artist) - \(.title)", class: .state, tooltip: .album} end'
-```
+Style the `playing`, `paused`, `stopped`, and `none` classes in `style.css`. The complete files are in [examples/waybar](../../examples/waybar/).
 
 ### SketchyBar
 

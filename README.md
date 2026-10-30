@@ -2,7 +2,7 @@
 
 ![spmeta banner: several sources converge into a bracketed play mark, which emits one line of now-playing text](docs/assets/spmeta-banner.png)
 
-`spmeta` prints the track Spotify is playing right now: one line of text, JSON, or your own template. It is built for status bars, scripts, and overlays, and runs on macOS and Linux as a single binary.
+`spmeta` prints the track Spotify is playing right now: one line of text, JSON, your own template, or a Waybar module line. It is built for status bars, scripts, and overlays, and runs on macOS and Linux as a single binary.
 
 ```console
 $ spmeta
@@ -58,6 +58,7 @@ Check the result with `spmeta version`.
 ```bash
 spmeta                                       # one line of text
 spmeta --format json                         # one JSON object
+spmeta --format waybar --watch               # JSON lines for a Waybar module
 spmeta --template '{artist} - {title}'       # your own line
 spmeta --watch                               # print a line on every change
 spmeta doctor                                # check what works, and why not
@@ -67,7 +68,7 @@ spmeta doctor                                # check what works, and why not
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--format text\|json\|template` | `text` | Output format. `--template` alone selects `template` |
+| `--format text\|json\|template\|waybar` | `text` | Output format. `--template` alone selects `template` |
 | `--template STR` | none | Template using `{field}` placeholders, for example `{state_icon} {artist} - {title}` |
 | `--watch` | off | Keep running; print a line only when the track, state, or device changes |
 | `--interval SECONDS` | 1 | Poll interval for `--watch`; minimum 0.5; only with `--watch` |
@@ -97,7 +98,15 @@ The icon is `▶` playing, `⏸` paused, or `■` stopped.
 
 **Template** renders one line from `{field}` placeholders. `{{` and `}}` give literal braces, and a missing value renders empty. An unknown field is an error before anything is read.
 
-When nothing is playing, text and template output are empty, JSON prints `null`, and the exit code is 3.
+**Waybar** prints one JSON object per line in the shape of a Waybar custom module with `return-type` set to `json`. `text` is the text-format line, `alt` and `class` are `playing`, `paused`, or `stopped`, `tooltip` lists the title, artists, album, and source, and `percentage` is the progress through the track. `percentage` is left out when the position or duration is unknown.
+
+```json
+{"text":"▶ Amazone — Alvan · Home (2:00 / 3:58)","alt":"playing","tooltip":"Amazone\nAlvan\nHome\nSource: macos","class":"playing","percentage":50}
+```
+
+Waybar reads `text` and `tooltip` as Pango markup, so `spmeta` escapes `&`, `<`, and `>` in both. Do not set Waybar's `escape` option with this format, or the text is escaped twice. The schema is in [docs/design/cli.md](docs/design/cli.md#waybar).
+
+When nothing is playing, text and template output are empty, JSON prints `null`, Waybar prints `{"text":"","alt":"none","class":"none"}`, and the exit code is 3.
 
 ## Exit codes
 
@@ -128,13 +137,14 @@ set -g status-interval 5
 set -g status-right '#(spmeta --template "{state_icon} {artist} - {title}" 2>/dev/null)'
 ```
 
-**Waybar** updates a custom module on each change. Waybar hides a module whose line is empty, which is what `spmeta` prints when nothing plays:
+**Waybar** updates a custom module on each change. The `waybar` format sets the text, tooltip, CSS class, and progress, and an empty text hides the module when nothing plays. Leave Waybar's `escape` option off, because `spmeta` already escapes the markup. The `playing`, `paused`, `stopped`, and `none` classes can be styled in `style.css`.
 
 ```json
 "custom/spotify": {
-  "exec": "spmeta --watch --template '{state_icon} {artist} - {title}'",
-  "max-length": 60,
-  "escape": true
+  "exec": "spmeta --watch --format waybar",
+  "return-type": "json",
+  "format": "{}",
+  "max-length": 60
 }
 ```
 
@@ -161,7 +171,7 @@ else
 fi
 ```
 
-The Waybar JSON return type and more examples are in [docs/design/cli.md](docs/design/cli.md#integration-examples).
+Copy-paste configurations for Waybar, SketchyBar, and tmux are in [examples](examples/README.md). More integration examples are in [docs/design/cli.md](docs/design/cli.md#integration-examples).
 
 ## macOS
 

@@ -88,6 +88,9 @@ func TestLoadPrecedence(t *testing.T) {
 		{"source flag over env", config.Flags{Source: ptr("local")}, map[string]string{"SPMETA_SOURCE": "web"}, `default_source = "auto"`, func(s config.Settings) bool { return s.Source == "local" }},
 
 		{"format from file", config.Flags{}, nil, `default_format = "json"`, func(s config.Settings) bool { return s.Format == "json" }},
+		{"waybar from file", config.Flags{}, nil, `default_format = "waybar"`, func(s config.Settings) bool { return s.Format == "waybar" }},
+		{"waybar from env", config.Flags{}, map[string]string{"SPMETA_FORMAT": "waybar"}, "", func(s config.Settings) bool { return s.Format == "waybar" }},
+		{"waybar from flag", config.Flags{Format: ptr("waybar")}, nil, "", func(s config.Settings) bool { return s.Format == "waybar" }},
 		{"format env over file", config.Flags{}, map[string]string{"SPMETA_FORMAT": "json"}, `default_format = "text"`, func(s config.Settings) bool { return s.Format == "json" }},
 		{"format flag over env", config.Flags{Format: ptr("text")}, map[string]string{"SPMETA_FORMAT": "json"}, `default_format = "json"`, func(s config.Settings) bool { return s.Format == "text" }},
 
@@ -196,7 +199,7 @@ func TestLoadInvalid(t *testing.T) {
 		want  []string
 	}{
 		{"flag source", config.Flags{Source: ptr("xml")}, nil, nil, []string{"--source", `"xml"`, "auto, local or web"}},
-		{"flag format", config.Flags{Format: ptr("xml")}, nil, nil, []string{"--format", `"xml"`, "text, json or template"}},
+		{"flag format", config.Flags{Format: ptr("xml")}, nil, nil, []string{"--format", `"xml"`, "text, json, template or waybar"}},
 		{"env source", config.Flags{}, map[string]string{"SPMETA_SOURCE": "cloud"}, nil, []string{"SPMETA_SOURCE", `"cloud"`}},
 		{"env format", config.Flags{}, map[string]string{"SPMETA_FORMAT": "xml"}, nil, []string{"SPMETA_FORMAT", `"xml"`}},
 		{"env invalid even when flag overrides", config.Flags{Format: ptr("json")}, map[string]string{"SPMETA_FORMAT": "xml"}, nil, []string{"SPMETA_FORMAT"}},

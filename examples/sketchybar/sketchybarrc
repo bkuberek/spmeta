@@ -1,0 +1,5 @@
+# Add this to ~/.config/sketchybar/sketchybarrc.
+# It places an item on the right that runs the plugin every 5 seconds.
+
+sketchybar --add item spotify right \
+           --set spotify update_freq=5 script="$HOME/.config/sketchybar/plugins/spotify.sh"
