@@ -55,7 +55,7 @@ func runAuth(ctx context.Context, args []string, stdout, stderr io.Writer, opts 
 	case "status":
 		return runStatus(args[1:], stdout, stderr, opts)
 	case "-h", "-help", "--help":
-		printAuthUsage(stdout)
+		printHelp(stdout, "auth")
 		return exitOK
 	default:
 		return usageError(stderr, "unknown auth command %q", args[0])
@@ -69,7 +69,7 @@ func parseAuthFlags(set *flag.FlagSet, command string, args []string, stdout, st
 	set.SetOutput(io.Discard)
 	if err := set.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			printAuthUsage(stdout)
+			printHelp(stdout, "auth")
 			return exitOK, true
 		}
 		if name, ok := strings.CutPrefix(err.Error(), "flag provided but not defined: -"); ok {
@@ -123,26 +123,44 @@ func (o options) loginPort() int {
 	return auth.DefaultLoginPort
 }
 
-func runLogin(ctx context.Context, args []string, stdout, stderr io.Writer, opts options) int {
+// loginFlags are the flags of auth login. internal/reference documents them,
+// and a test keeps the two in step.
+type loginFlags struct {
+	set                  *flag.FlagSet
+	clientID, configFile *string
+	port                 *int
+	noBrowser, debug     *bool
+}
+
+// newLoginFlags returns the flags of auth login, with port as the --port
+// default.
+func newLoginFlags(port int) loginFlags {
 	set := flag.NewFlagSet("spmeta auth login", flag.ContinueOnError)
-	clientID := set.String("client-id", "", "")
-	port := set.Int("port", opts.loginPort(), "")
-	noBrowser := set.Bool("no-browser", false, "")
-	debug := set.Bool("debug", false, "")
-	configFile := set.String("config", "", "")
-	if code, done := parseAuthFlags(set, "login", args, stdout, stderr); done {
+	return loginFlags{
+		set:        set,
+		clientID:   set.String("client-id", "", ""),
+		port:       set.Int("port", port, ""),
+		noBrowser:  set.Bool("no-browser", false, ""),
+		debug:      set.Bool("debug", false, ""),
+		configFile: set.String("config", "", ""),
+	}
+}
+
+func runLogin(ctx context.Context, args []string, stdout, stderr io.Writer, opts options) int {
+	lf := newLoginFlags(opts.loginPort())
+	if code, done := parseAuthFlags(lf.set, "login", args, stdout, stderr); done {
 		return code
 	}
-	if *port < 0 || *port > maxPort {
-		return usageError(stderr, "invalid value %d for --port: want 0 to %d", *port, maxPort)
+	if *lf.port < 0 || *lf.port > maxPort {
+		return usageError(stderr, "invalid value %d for --port: want 0 to %d", *lf.port, maxPort)
 	}
-	flags := config.Flags{Debug: *debug}
-	set.Visit(func(f *flag.Flag) {
+	flags := config.Flags{Debug: *lf.debug}
+	lf.set.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "client-id":
-			flags.ClientID = clientID
+			flags.ClientID = lf.clientID
 		case "config":
-			flags.Config = configFile
+			flags.Config = lf.configFile
 		}
 	})
 	settings, err := loadAuthSettings(flags, opts, stderr)
@@ -163,18 +181,18 @@ func runLogin(ctx context.Context, args []string, stdout, stderr io.Writer, opts
 		return failAuth(stderr, slog.New(slog.DiscardHandler), err)
 	}
 
-	log := debugLogger(*debug, stderr)
-	log.Debug("login", "token", path, "port", *port, "browser", !*noBrowser)
+	log := debugLogger(*lf.debug, stderr)
+	log.Debug("login", "token", path, "port", *lf.port, "browser", !*lf.noBrowser)
 	open := opts.browser
 	if open == nil {
 		open = auth.OpenBrowser
 	}
-	if *noBrowser {
+	if *lf.noBrowser {
 		open = nil
 	}
 	_, err = auth.Login(ctx, auth.LoginOptions{
 		ClientID:  id,
-		Port:      *port,
+		Port:      *lf.port,
 		Path:      path,
 		Endpoints: opts.endpoints,
 		Open:      open,
@@ -233,8 +251,7 @@ func runStatus(args []string, stdout, stderr io.Writer, opts options) int {
 // --config, and returns the token file. When ok is false the command is
 // finished with exit code code.
 func authTokenFile(command string, args []string, stdout, stderr io.Writer, opts options) (path string, code int, ok bool) {
-	set := flag.NewFlagSet("spmeta auth "+command, flag.ContinueOnError)
-	configFile := set.String("config", "", "")
+	set, configFile := newTokenFlags(command)
 	if code, done := parseAuthFlags(set, command, args, stdout, stderr); done {
 		return "", code, false
 	}
@@ -253,6 +270,13 @@ func authTokenFile(command string, args []string, stdout, stderr io.Writer, opts
 		return "", failAuth(stderr, slog.New(slog.DiscardHandler), err), false
 	}
 	return path, exitOK, true
+}
+
+// newTokenFlags returns the flags of auth logout or auth status, which take
+// only --config.
+func newTokenFlags(command string) (set *flag.FlagSet, configFile *string) {
+	set = flag.NewFlagSet("spmeta auth "+command, flag.ContinueOnError)
+	return set, set.String("config", "", "")
 }
 
 // printStatus describes the stored login. It never prints the tokens.

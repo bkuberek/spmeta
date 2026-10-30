@@ -1,6 +1,7 @@
 # Build output
 /spmeta
 /dist/
+/dist-extras/
 
 # Test and coverage output
 *.out

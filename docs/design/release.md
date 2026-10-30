@@ -51,6 +51,7 @@ release-please creates tag vX.Y.Z and the GitHub Release (notes = the CHANGELOG 
   |  same workflow, second job, only when release_created == "true"
   v
 goreleaser release --clean (checks out the tag)
+  generates completions and the man page (internal/docgen)
   builds darwin/linux x amd64/arm64, archives, checksums.txt, .deb, .rpm
   |
   +--> uploads assets to the existing GitHub Release (release.mode: keep-existing)
@@ -94,11 +95,12 @@ A `concurrency` group serializes release runs. Pinned versions and why:
 
 ### `.goreleaser.yaml`
 
+- A `before` hook runs `go run ./internal/docgen -version {{ .Version }} -date {{ .CommitDate }} dist-extras`, which writes the completion scripts and the man page (see "Completions and man page" below).
 - One build, `./cmd/spmeta`, for `darwin` and `linux` on `amd64` and `arm64`, with `CGO_ENABLED=0`, `-trimpath`, and the `-X` ldflags from "Version in the binary".
-- `tar.gz` archives named `spmeta_<version>_<os>_<arch>` that contain the binary, `LICENSE`, and `README.md`, and one `checksums.txt`. `CHANGELOG.md` is not in the archives: goreleaser fails on a file pattern that matches nothing, and the file does not exist until the first release pull request merges, so `release-check` would fail until then.
+- `tar.gz` archives named `spmeta_<version>_<os>_<arch>` that contain the binary, `LICENSE`, `README.md`, `completions/spmeta.bash`, `completions/spmeta.zsh`, `completions/spmeta.fish`, and `manpages/spmeta.1.gz`, and one `checksums.txt`. `CHANGELOG.md` is not in the archives: goreleaser fails on a file pattern that matches nothing, and the file does not exist until the first release pull request merges, so `release-check` would fail until then.
 - `changelog.disable: true` and `release.mode: keep-existing`.
-- `nfpms` builds `.deb` and `.rpm` packages (maintainer `Bastian Kuberek <bastian@bkuberek.com>`, license MIT, binary in `/usr/bin`).
-- `homebrew_casks` pushes `Casks/spmeta.rb` to `bkuberek/homebrew-tap` with the token `HOMEBREW_TAP_GITHUB_TOKEN`. A post-install hook removes the quarantine flag on macOS:
+- `nfpms` builds `.deb` and `.rpm` packages (maintainer `Bastian Kuberek <bastian@bkuberek.com>`, license MIT, binary in `/usr/bin`) that also install the completions and the man page.
+- `homebrew_casks` pushes `Casks/spmeta.rb` to `bkuberek/homebrew-tap` with the token `HOMEBREW_TAP_GITHUB_TOKEN`. Its `manpages` and `completions` fields name the files in the archive. A post-install hook removes the quarantine flag on macOS:
 
   ```yaml
   hooks:
@@ -111,7 +113,22 @@ A `concurrency` group serializes release runs. Pinned versions and why:
 
   The goreleaser documentation warns that this bypasses macOS security and may stop working in a future macOS version; signing and notarization is the lasting fix.
 
-The generated cask has `on_macos` and `on_linux` blocks, each with `on_arm` and `on_intel` archives, a `binary "spmeta"` stanza, and the hook as a `postflight_steps` block. Homebrew documents the `postflight_steps` DSL and requires it for casks in official taps; its docs do not state the Homebrew version that introduced it, so a very old Homebrew may reject the cask.
+The generated cask has `on_macos` and `on_linux` blocks, each with `on_arm` and `on_intel` archives, a `binary "spmeta"` stanza, `manpage`, `bash_completion`, `zsh_completion`, and `fish_completion` stanzas, and the hook as a `postflight_steps` block. Homebrew documents the `postflight_steps` DSL and requires it for casks in official taps; its docs do not state the Homebrew version that introduced it, so a very old Homebrew may reject the cask.
+
+### Completions and man page
+
+`internal/reference` describes every command and flag once, and renders the `--help` pages, the completion scripts that `spmeta completion` prints, and the `spmeta(1)` man page from it. A test in `internal/cli` fails when a command registers a flag that the reference lacks, or the reverse.
+
+`internal/docgen` writes the release copies into `dist-extras/`, which is ignored by git. The directory is separate from `dist/` because goreleaser checks that `dist/` is empty after the `before` hooks run. The man page header shows the version and the commit date, and the gzip header carries no name or time, so a rebuild of the same commit gives the same bytes.
+
+| File | In the archive | `.deb` | `.rpm` | Homebrew stanza |
+| --- | --- | --- | --- | --- |
+| `spmeta.bash` | `completions/spmeta.bash` | `/usr/share/bash-completion/completions/spmeta` | same as `.deb` | `bash_completion` |
+| `spmeta.zsh` | `completions/spmeta.zsh` | `/usr/share/zsh/vendor-completions/_spmeta` | `/usr/share/zsh/site-functions/_spmeta` | `zsh_completion` |
+| `spmeta.fish` | `completions/spmeta.fish` | `/usr/share/fish/vendor_completions.d/spmeta.fish` | same as `.deb` | `fish_completion` |
+| `spmeta.1.gz` | `manpages/spmeta.1.gz` | `/usr/share/man/man1/spmeta.1.gz` | same as `.deb` | `manpage` |
+
+The zsh file has a different path per package because no directory is on the default `$fpath` of both families: Debian's zsh reads `/usr/share/zsh/vendor-completions` but not `/usr/share/zsh/site-functions`, and Fedora's reads `/usr/share/zsh/site-functions` but not `vendor-completions` (checked with `zsh -fc 'print -l $fpath'` in `debian:stable` and `fedora:latest`). nfpm's `packager` field selects the entry. The man page is installed gzip-compressed because Debian Policy asks for man pages compressed with `gzip -9n`, and nfpm installs files exactly as given. Homebrew renames the completion files on install (`spmeta.bash` to `spmeta`, `spmeta.zsh` to `_spmeta`) and accepts a `.gz` man page.
 
 ### `ci.yml` job `release-check`
 
@@ -159,6 +176,6 @@ Before merging a release pull request:
 After the release workflow finishes:
 
 1. Confirm the GitHub Release lists four archives, `checksums.txt`, two `.deb`, and two `.rpm` files.
-2. Run `brew install --cask bkuberek/tap/spmeta && spmeta version` on macOS and confirm the version; on a Linux machine with a current Homebrew, run the same command and record the result.
+2. Run `brew install --cask bkuberek/tap/spmeta && spmeta version` on macOS and confirm the version, that `man spmeta` opens, and that `spmeta --<Tab>` completes in your shell; on a Linux machine with a current Homebrew, run the same command and record the result.
 3. Run `go install github.com/bkuberek/spmeta/cmd/spmeta@vX.Y.Z` and confirm `spmeta version`.
-4. Install the `.deb` on an Ubuntu machine or container and run `spmeta version`.
+4. Install the `.deb` on an Ubuntu machine or container and run `spmeta version` and `man -w spmeta`.

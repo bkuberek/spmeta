@@ -29,12 +29,12 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
 
 ## Tasks
 
-- [ ] N1 — Doctor reports the Web token state even when the config file is invalid.
+- [x] N1 — Doctor reports the Web token state even when the config file is invalid.
   - Cause: `config.Load` returns `Settings{}` on error (`internal/config/config.go:107-121`), so `TokenPath` is empty and `newWeb` returns nil (`internal/cli/web.go:41`).
   - Acceptance: with an invalid config file and a valid token file, doctor shows the config error and a real Web check result, not `web not configured`. RED test in `internal/cli/doctor_test.go` first.
-- [ ] N2 — `--format waybar` and an `examples/` directory.
+- [x] N2 — `--format waybar` and an `examples/` directory.
   - Acceptance: emits one JSON object per line with `text`, `tooltip`, `class` (and `alt`), schema documented in `docs/design/cli.md`; `class` reflects playing/paused/stopped; nothing playing emits an empty `text` and exits per the existing contract in watch mode; copy-paste configs for Waybar, SketchyBar, and tmux under `examples/`, linked from the README.
-- [ ] N3 — Shell completions and a man page.
+- [x] N3 — Shell completions and a man page.
   - Acceptance: `spmeta completion bash|zsh|fish` prints a script; a man page `spmeta.1` is generated from one source of truth with the usage text; goreleaser ships both in archives, `.deb`/`.rpm`, and the Homebrew cask; a test keeps completions in sync with the flag sets.
 - [ ] N4 — Event-driven `watch` on Linux.
   - Acceptance: the watch loop accepts an optional wake source; the MPRIS backend subscribes to `PropertiesChanged` on `/org/mpris/MediaPlayer2` over one persistent connection; a track change emits without waiting for the next poll; polling stays as the fallback and keeps `--interval` semantics; falls back to pure polling when subscription fails. Uses godbus only.
@@ -64,7 +64,11 @@ Strategy: `single-pr` (standing decision). Forecast: roughly 1,500 to 2,000 auth
 
 ## Progress
 
-- 2026-10-30: branch created; code mapped (explorer). macOS notification probe running.
+- 2026-10-30: branch created; code mapped (explorer).
+- N1 (delegated writer; risk high → independent verifier PASS): `config.Load` returns `TokenPath` with its error so doctor runs the real Web check. RED/GREEN `TestDoctorChecksWebWhenConfigIsInvalid`. Commit 54335f8.
+- N2 (delegated writer; risk high → verifier PASS against Waybar source and wiki; two doc nits fixed by the parent): `--format waybar` with Pango escaping, `examples/` for Waybar, SketchyBar, tmux. Live output checked on macOS. Commit 76ed0fc.
+- N3 (delegated writer; risk high → verifier PASS; three wording fixes by the parent): `internal/reference` drives help, completions, and `spmeta(1)`; `spmeta completion bash|zsh|fish`; `internal/docgen` runs as a goreleaser before hook into `dist-extras/`; archives, .deb, .rpm, and cask ship them (zsh path per packager). `goreleaser check` and snapshot pass in Docker; .deb and .rpm installs verified in Debian and Fedora containers. Help now lists `--watch` and `--interval`.
+- macOS notification probe: listener registers, but two runs (5 and 10 minutes) saw no events while Spotify was paused. Needs a live play/skip by the user before N5.
 
 ## Next step
 

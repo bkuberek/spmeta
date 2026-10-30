@@ -16,15 +16,19 @@ import (
 	"github.com/bkuberek/spmeta/internal/doctor"
 )
 
-func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, info BuildInfo, opts options) int {
-	set := flag.NewFlagSet("spmeta doctor", flag.ContinueOnError)
+// newDoctorFlags returns the flags of doctor, which internal/reference
+// documents.
+func newDoctorFlags() (set *flag.FlagSet, debug *bool, configFile *string) {
+	set = flag.NewFlagSet("spmeta doctor", flag.ContinueOnError)
 	set.SetOutput(io.Discard)
-	debug := set.Bool("debug", false, "")
-	configFile := set.String("config", "", "")
+	return set, set.Bool("debug", false, ""), set.String("config", "", "")
+}
 
+func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, info BuildInfo, opts options) int {
+	set, debug, configFile := newDoctorFlags()
 	if err := set.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			printDoctorUsage(stdout)
+			printHelp(stdout, "doctor")
 			return exitOK
 		}
 		if name, ok := strings.CutPrefix(err.Error(), "flag provided but not defined: -"); ok {
