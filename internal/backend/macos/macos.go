@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bkuberek/spmeta/internal/backend"
+	"github.com/bkuberek/spmeta/internal/hostapp"
 	"github.com/bkuberek/spmeta/internal/model"
 )
 
@@ -26,7 +28,8 @@ const (
 	msgNotRunning     = "Spotify is not running."
 	hintDoctor        = "Run `spmeta doctor`."
 	hintFirstRun      = "If this is the first run, macOS may be waiting for you to allow Automation access: run `spmeta doctor`."
-	hintAutomation    = "Allow it in System Settings > Privacy & Security > Automation, under the app that runs spmeta (for example Terminal), then run `spmeta doctor`."
+	hintAutomation    = "Allow it in System Settings > Privacy & Security > Automation, under %s, then run `spmeta doctor`."
+	unknownHostApp    = "the app that runs spmeta"
 	codeNotAuthorized = -1743
 	codeNotRunning    = -600
 	codeTimedOut      = -1712
@@ -50,6 +53,9 @@ type Backend struct {
 	readyTimeout time.Duration
 	// heartbeat is the interval of the listener's tick lines.
 	heartbeat time.Duration
+	// hostApp names the app macOS asks about, or returns "" when unknown. It
+	// runs only while building the permission-denied hint.
+	hostApp func(ctx context.Context) string
 }
 
 // New returns a Backend that runs programs through r and stamps results with
@@ -64,6 +70,7 @@ func New(r Runner, now func() time.Time) *Backend {
 		notification:      spotifyNotification,
 		readyTimeout:      listenerReadyTimeout,
 		heartbeat:         listenerHeartbeat,
+		hostApp:           detectHostApp,
 	}
 }
 
@@ -127,7 +134,7 @@ func (b *Backend) scriptError(ctx context.Context, stderr []byte, cause error) *
 	case !ok:
 		return fail(backend.KindUnexpected, "osascript failed.", "")
 	case n == codeNotAuthorized:
-		return fail(backend.KindPermissionDenied, "macOS did not allow this app to control Spotify.", hintAutomation)
+		return fail(backend.KindPermissionDenied, "macOS did not allow this app to control Spotify.", b.automationHint(ctx))
 	case n == codeNotRunning:
 		return fail(backend.KindNotAvailable, msgNotRunning, "")
 	case n == codeTimedOut:
@@ -135,6 +142,25 @@ func (b *Backend) scriptError(ctx context.Context, stderr []byte, cause error) *
 	default:
 		return fail(backend.KindUnexpected, fmt.Sprintf("osascript failed (error %d).", n), "")
 	}
+}
+
+// automationHint names the app to allow in System Settings. The lookup runs a
+// short process of its own, so it must not take the read's remaining time.
+func (b *Backend) automationHint(ctx context.Context) string {
+	app := ""
+	if b.hostApp != nil {
+		app = b.hostApp(context.WithoutCancel(ctx))
+	}
+	if app == "" {
+		app = unknownHostApp
+	}
+	return fmt.Sprintf(hintAutomation, app)
+}
+
+// detectHostApp looks for the app that launched this process, falling back to
+// TERM_PROGRAM.
+func detectHostApp(ctx context.Context) string {
+	return hostapp.Resolve(ctx, os.Getenv("TERM_PROGRAM"), nil)
 }
 
 func errorNumber(stderr []byte) (int, bool) {

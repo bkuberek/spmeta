@@ -80,6 +80,8 @@ internal/watch/
   watch.go                # polling loop with wakes, change detection, emission
 internal/doctor/
   doctor.go               # collects source checks into a report
+internal/hostapp/
+  hostapp.go              # names the app macOS asks about: parent process chain, then TERM_PROGRAM
 schema/
   schema.go               # embeds the schema for tests in other packages
   spmeta.schema.json      # JSON Schema for the JSON output

@@ -147,11 +147,11 @@ func TestRunConfigLine(t *testing.T) {
 
 func TestRunMacOS(t *testing.T) {
 	tests := []struct {
-		name     string
-		result   macos.PermissionResult
-		terminal string
-		want     string
-		usable   bool
+		name   string
+		result macos.PermissionResult
+		app    string // what the host-app resolver returns
+		want   string
+		usable bool
 	}{
 		{
 			"granted",
@@ -161,14 +161,14 @@ func TestRunMacOS(t *testing.T) {
 			true,
 		},
 		{
-			"denied names the terminal",
+			"denied names the host app",
 			macos.PermissionResult{State: macos.PermissionDenied},
-			"Apple_Terminal",
+			"Terminal",
 			"macos   denied: macOS did not allow Terminal to control Spotify. Allow it in System Settings > Privacy & Security > Automation, then run 'spmeta doctor' again.",
 			false,
 		},
 		{
-			"denied without a terminal",
+			"denied without a host app",
 			macos.PermissionResult{State: macos.PermissionDenied},
 			"",
 			"macos   denied: macOS did not allow the app that runs spmeta to control Spotify. Allow it in System Settings > Privacy & Security > Automation, then run 'spmeta doctor' again.",
@@ -199,7 +199,7 @@ func TestRunMacOS(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeMacOS{result: tc.result}
-			lines, err := report(t, doctor.Options{MacOS: f, Terminal: tc.terminal})
+			lines, err := report(t, doctor.Options{MacOS: f, HostApp: func(context.Context) string { return tc.app }})
 			if !contains(lines, tc.want) {
 				t.Errorf("report lacks line %q:\n%s", tc.want, strings.Join(lines, "\n"))
 			}
@@ -216,14 +216,14 @@ func TestRunMacOS(t *testing.T) {
 func TestRunMacOSNotice(t *testing.T) {
 	t.Run("shown before the macos line", func(t *testing.T) {
 		f := &fakeMacOS{result: macos.PermissionResult{State: macos.PermissionGranted}, prompts: true}
-		lines, _ := report(t, doctor.Options{MacOS: f, Terminal: "iTerm.app"})
+		lines, _ := report(t, doctor.Options{MacOS: f, HostApp: func(context.Context) string { return "iTerm" }})
 		notice := indexOf(lines, "macOS may ask to allow iTerm to control Spotify; click OK.")
 		macosLine := indexOfPrefix(lines, "macos   ")
 		if notice < 0 || macosLine < 0 || notice > macosLine {
 			t.Errorf("notice at %d, macos line at %d:\n%s", notice, macosLine, strings.Join(lines, "\n"))
 		}
 	})
-	t.Run("unknown terminal", func(t *testing.T) {
+	t.Run("unknown host app", func(t *testing.T) {
 		f := &fakeMacOS{result: macos.PermissionResult{State: macos.PermissionGranted}, prompts: true}
 		lines, _ := report(t, doctor.Options{MacOS: f})
 		if !contains(lines, "macOS may ask to allow the app that runs spmeta to control Spotify; click OK.") {
@@ -237,6 +237,31 @@ func TestRunMacOSNotice(t *testing.T) {
 			t.Errorf("unexpected notice:\n%s", strings.Join(lines, "\n"))
 		}
 	})
+}
+
+func TestRunHostAppLookup(t *testing.T) {
+	tests := []struct {
+		name      string
+		result    macos.PermissionResult
+		prompts   bool
+		wantCalls int
+	}{
+		{"granted without a prompt never looks", macos.PermissionResult{State: macos.PermissionGranted}, false, 0},
+		{"spotify not running never looks", macos.PermissionResult{State: macos.PermissionSpotifyNotRunning}, false, 0},
+		{"no answer never looks", macos.PermissionResult{State: macos.PermissionNoAnswer}, false, 0},
+		{"notice and denied share one lookup", macos.PermissionResult{State: macos.PermissionDenied}, true, 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			app := func(context.Context) string { calls++; return "Ghostty" }
+			f := &fakeMacOS{result: tc.result, prompts: tc.prompts}
+			_, _ = report(t, doctor.Options{MacOS: f, HostApp: app})
+			if calls != tc.wantCalls {
+				t.Errorf("host app resolved %d times, want %d", calls, tc.wantCalls)
+			}
+		})
+	}
 }
 
 func TestRunMPRIS(t *testing.T) {

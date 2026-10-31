@@ -10,4 +10,4 @@ Copy-paste configurations for the status bars that `spmeta` is built for. Each e
 
 Each file starts with a comment that says where to put it.
 
-On macOS, the first read from a new host app needs the Automation permission described in the [README](../README.md#macos). Run `spmeta doctor` once from a terminal, and allow the status bar app when macOS asks.
+On macOS, the first read from a new host app needs the Automation permission described in the [README](../README.md#macos). The permission is per app: allowing your terminal does not cover the status bar. Let the bar run its plugin once and allow the bar app (for example SketchyBar) when macOS asks.

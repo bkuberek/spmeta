@@ -38,7 +38,10 @@ type options struct {
 	web      backend.Backend
 	env      config.Env
 	sleep    func(context.Context, time.Duration) error
-	now      func() time.Time
+	// hostApp names the app macOS asks about, given TERM_PROGRAM; nil selects
+	// hostapp.Resolve.
+	hostApp func(ctx context.Context, termProgram string) string
+	now     func() time.Time
 	// endpoints is where the Web backend and the auth commands go, and browser
 	// is how auth login opens its URL; zero values select the Spotify services
 	// and the system browser.
@@ -66,6 +69,13 @@ func WithEnv(env config.Env) Option {
 // environment and configuration file.
 func WithLocalFactory(f func(local.Settings) backend.Backend) Option {
 	return func(o *options) { o.newLocal = f }
+}
+
+// WithHostApp replaces how doctor names the app macOS asks about. It receives
+// TERM_PROGRAM and returns "" when the app is unknown. Tests use it to avoid
+// running ps.
+func WithHostApp(f func(ctx context.Context, termProgram string) string) Option {
+	return func(o *options) { o.hostApp = f }
 }
 
 // WithBackend sets the local backend the root command reads, in place of the
