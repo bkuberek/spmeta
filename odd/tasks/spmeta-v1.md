@@ -27,7 +27,7 @@ Status bars, automation and overlays need a stable JSON contract and exit codes,
 
 ## Status
 
-Phase: **implementation** (T1–T9 done; T10 code done, manual-matrix rows pending; T15 done, v0.1.0 released; T11–T14 done on feat/web-mode; Web PR next). Receipt-driven review is off (global), so tasks close on their own checks.
+Phase: **released** (T1–T9 and T11–T15 done; v0.1.0 and v0.2.0 released; T10 macOS manual rows done 2026-10-31, Linux desktop rows open in issue #8). Follow-up work is in `odd/tasks/next-level.md`. Receipt-driven review is off (global), so tasks close on their own checks.
 
 ## Planning checklist
 
@@ -212,7 +212,7 @@ Route rule: a task is delegated to one writer when it touches two or more non-tr
 
 ### T10 Doctor and README
 
-- [ ] T10 complete (code done 2026-10-28; manual-matrix rows that need user action are pending)
+- [ ] T10 complete (code done 2026-10-28; macOS manual rows done 2026-10-31 in https://github.com/bkuberek/spmeta/issues/8#issuecomment-6545665675: podcast, local file, Spotify quit, Automation denied pass; ad and nothing-loaded not reproducible; Web exits 5 and 6 skipped by the maintainer; Linux desktop players still open)
 - Evidence (2026-10-28):
   - RED: `macos` build failed (`undefined: PermissionState`, `CheckPermission undefined`); `internal/doctor` had no non-test files; `cli` build failed on `macos.PermissionResult`. GREEN: `go test -race -count=1 ./...` passes; `go vet` (darwin, linux, linux+integration) is clean; `golangci-lint run` reports 0 issues; the linux and windows builds compile. The parent re-ran tests and lint.
   - Design: `macos.CheckPermission(ctx, beforePrompt func())` runs only when Spotify is running and uses a 120 s timeout. `internal/doctor` works against two small interfaces. `internal/cli/doctor.go` type-asserts the local backend, so no new options are needed. `mpris.Players` already existed from T6/T7, so only a characterization test was added.
@@ -470,4 +470,4 @@ Planning defaults chosen by the writer, accepted on review with ADRs 0005–0008
 
 ## Next step
 
-Open the single PR for T11–T14 from `feat/web-mode`, merge it, then merge the v0.2.0 release PR. The T10 manual-matrix rows are still pending with the user.
+v0.2.0 is released. The only open T10 rows are the Linux desktop players in issue #8; further work is tracked in `odd/tasks/next-level.md`.
