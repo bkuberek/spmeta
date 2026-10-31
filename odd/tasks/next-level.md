@@ -43,7 +43,7 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
   - Acceptance: ADR 0010 records the event design for both platforms; listener lifecycle is tied to the watch context; falls back to polling when the listener fails.
 - [x] N6 — AUR and Nix distribution.
   - Acceptance: goreleaser `aurs` (package `spmeta-bin`) and `nix` (NUR repository) sections that skip upload when their secret is missing; `release-check` passes; README install section and `docs/design/release.md` updated; user setup steps listed.
-- [ ] N7 — README demo GIF.
+- [x] N7 — README demo GIF.
   - Decision (2026-10-30, user approved the recommendation): record in Docker with VHS against the mock MPRIS player from the integration tests, with neutral sample tracks, so the demo is real `spmeta` output, reproducible, and free of the user's listening history.
   - Acceptance: a VHS tape and a script that rebuild `docs/assets/demo.gif`, showing `spmeta`, `--format json`, and `--watch` picking up a track change; linked from the README.
 - [ ] N8 — Live trust checks with the user (tracked in a GitHub issue; done when the user is at the Mac).
@@ -75,6 +75,7 @@ Strategy: two PRs, approved by the user on 2026-10-30 as an exception to `single
 - 2026-10-30: JXA delivery proven with a private notification name (`dev.spmeta.probe`): received within a second, about 29 MB idle, 0.0% CPU. Spotify's own notification is still unobserved live (issue #8).
 - PR 1 opened: https://github.com/bkuberek/spmeta/pull/7 (CI 8/8 green). Issue #8 holds N8. Branch auto-delete enabled. Release-please token option committed on `feat/macos-events` as 9d68efc (falls back to `GITHUB_TOKEN` until `RELEASE_PLEASE_TOKEN` exists).
 - N5 (delegated writer; risk high → verifier PASS, then follow-ups by the same writer): macOS backend implements `Notifier` with a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged`; sends no Apple events, so it never launches Spotify. `runWatch` waits up to 1 s for the notifier to stop; a 5 s heartbeat makes the listener exit after SIGKILL or SIGHUP of spmeta (measured 3 s). End-to-end test posts only `dev.spmeta.test.*` names and skips on CI timeout. ADR 0010 Accepted.
+- N7 (delegated writer; risk high → verifier PASS; three nits fixed by the parent): `docs/assets/demo/record.sh` builds the real Linux `spmeta` and a `//go:build demo` mock MPRIS player, then records `docs/assets/demo.gif` (166 KB, 24.5 s) with VHS v0.11.0 under `dbus-run-session`. Fictional tracks; trackids produce no Spotify URIs. Frames inspected. VHS v0.12.0 writes no output, hence the pin.
 
 ## Next step
 

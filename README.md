@@ -9,6 +9,10 @@ $ spmeta
 ▶ Amazone — Alvan · Home (2:00 / 3:58)
 ```
 
+![Terminal demo of spmeta reading a mock MPRIS player: plain text output, JSON piped to jq, a custom template, then --watch printing a new line when the track changes and when playback pauses](docs/assets/demo.gif)
+
+The demo shows the real Linux binary reading a fictional player on a private D-Bus session bus, recorded in Docker. To rebuild it, see [docs/README.md](docs/README.md#assets).
+
 `spmeta` is an independent project and is not affiliated with, endorsed by, or sponsored by Spotify. "Spotify" is a trademark of Spotify AB.
 
 Status: early release. `spmeta` reads the Spotify client on this machine, and with a one-time setup it can also read what plays on your other devices ([Web mode](#web-mode)).
