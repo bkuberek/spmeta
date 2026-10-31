@@ -46,7 +46,7 @@ Dated October 27, 2026. Each note separates verified findings, live observations
 
 ## Decisions
 
-The [decision index](./decisions/README.md) lists all ADRs and their status. ADRs 0001 to 0008 are Accepted.
+The [decision index](./decisions/README.md) lists all ADRs and their status. ADRs 0001 to 0008 and 0010 are Accepted.
 
 ## Design
 
@@ -56,7 +56,7 @@ The [decision index](./decisions/README.md) lists all ADRs and their status. ADR
 | [cli.md](./design/cli.md) | Commands, flags, output formats, template syntax, exit codes, environment, configuration, integration examples |
 | [data-model.md](./design/data-model.md) | `NowPlaying` fields, null rules, per-source mapping |
 | [spmeta.schema.json](../schema/spmeta.schema.json) | JSON Schema (draft 2020-12) for JSON output |
-| [backend-macos.md](./design/backend-macos.md) | AppleScript backend: process guard, script, parser, errors |
+| [backend-macos.md](./design/backend-macos.md) | AppleScript backend: process guard, script, parser, errors, change listener |
 | [backend-linux.md](./design/backend-linux.md) | MPRIS backend: bus discovery, D-Bus calls, selection, mapping |
 | [backend-web.md](./design/backend-web.md) | Web backend and PKCE authentication |
 | [testing.md](./design/testing.md) | Test strategy, fixture catalogue, CI, manual matrix, acceptance criteria |

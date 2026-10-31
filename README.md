@@ -110,7 +110,7 @@ spmeta doctor                                # check what works, and why not
 | --- | --- | --- |
 | `--format text\|json\|template\|waybar` | `text` | Output format. `--template` alone selects `template` |
 | `--template STR` | none | Template using `{field}` placeholders, for example `{state_icon} {artist} - {title}` |
-| `--watch` | off | Keep running; print a line only when the track, state, or device changes. On Linux, a change prints as soon as the player announces it |
+| `--watch` | off | Keep running; print a line only when the track, state, or device changes. On Linux and macOS, a change prints as soon as the player announces it |
 | `--interval SECONDS` | 1 | Poll interval for `--watch`, which stays the fallback; minimum 0.5; only with `--watch` |
 | `--player NAME` | none | Linux: use this MPRIS player (see [Linux](#linux)) |
 | `--source auto\|local\|web` | `auto` | Where to read; `web` needs a [login](#web-mode) |

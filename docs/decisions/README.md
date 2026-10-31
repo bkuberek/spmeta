@@ -24,6 +24,9 @@ Status values:
 | [0006](./0006-dependencies.md) | Keep runtime dependencies to godbus and BurntSushi/toml | Accepted |
 | [0007](./0007-macos-applescript-access.md) | Read Spotify.app on macOS through AppleScript with a process guard | Accepted |
 | [0008](./0008-versioning-and-release.md) | Version with SemVer, generate the changelog, and automate releases | Accepted |
+| [0010](./0010-event-driven-watch.md) | Wake watch mode with player change notifications, keeping polling as the fallback | Accepted |
+
+ADR 0009 (Windows support) is a proposal on the `docs/windows-proposal` branch and is not part of this index until that branch merges.
 
 ## Adding a record
 

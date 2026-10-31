@@ -46,10 +46,11 @@ internal/backend/
   notifier.go             # optional Notifier interface, Coalesce
   errors.go               # Error, Kind, ExitCode, Worse
 internal/backend/macos/
-  runner.go               # Runner interface, exec implementation
-  script.go               # the AppleScript (constant)
+  runner.go               # Runner interface, exec implementation, listener command
+  script.go               # the read AppleScript (constant), the change listener script
   parse.go                # output parser
   macos.go                # Backend implementation, permission check for doctor
+  notify.go               # Changes: change notifications for watch mode
 internal/backend/mpris/
   bus.go                  # Bus interface, Properties type
   select.go               # player matching and selection
@@ -122,7 +123,7 @@ func Coalesce[T any](in <-chan T, keep func(T) bool) <-chan struct{}
 | Backend | Notifier |
 | --- | --- |
 | MPRIS | Yes: `PropertiesChanged` and `NameOwnerChanged` signals ([backend-linux.md](./backend-linux.md#change-notifications)) |
-| macOS | Not yet; watch mode polls |
+| macOS | Yes: Spotify's `com.spotify.client.PlaybackStateChanged` distributed notification, observed by a JXA listener ([backend-macos.md](./backend-macos.md#change-notifications)) |
 | Web | No; the Web API sends no notifications |
 
 Backends receive their collaborators through constructors so tests can inject fakes:
@@ -289,9 +290,9 @@ Each line is written with one `Write` call to unbuffered stdout, so consumers se
 
 ### Change notifications
 
-`runWatch` in `internal/cli` checks whether the reader it watches, the resolver, implements `backend.Notifier`. If so, it calls `Changes` with a context that ends when the loop returns, and passes the channel as `Options.Wake`. Starting is best-effort: on an error, the loop polls only, and `--debug` logs one line with the reason. On Linux the resolver delegates to the MPRIS backend in auto and local modes; macOS and Web have no notifications yet, so they poll as before.
+`runWatch` in `internal/cli` checks whether the reader it watches, the resolver, implements `backend.Notifier`. If so, it calls `Changes` with a context that ends when the loop returns, and passes the channel as `Options.Wake`. Starting is best-effort: on an error, the loop polls only, and `--debug` logs one line with the reason. When the loop returns, `runWatch` cancels that context and waits up to 1 s for the channel to close, because `main` exits the process right after: a notifier that runs a process, such as the macOS listener, closes its channel only once that process is gone. In auto and local modes the resolver delegates to the local backend: the MPRIS backend on Linux, and the macOS backend's listener process on macOS. The Web API sends no notifications, so `--source web` polls as before. The design for both platforms is recorded in [ADR 0010](../decisions/0010-event-driven-watch.md).
 
-After a read that reached a source (an item, nothing playing, or not available), the loop sleeps in two parts: first `MinWakeGap` (100 ms), which no wake ends, then the rest of `Interval`, which a wake ends. A player that floods signals therefore causes at most one read per 100 ms, each on a fresh D-Bus connection, instead of reads back to back. The rules:
+After a read that reached a source (an item, nothing playing, or not available), the loop sleeps in two parts: first `MinWakeGap` (100 ms), which no wake ends, then the rest of `Interval`, which a wake ends. A player that floods notifications therefore causes at most one read per 100 ms, each on a fresh D-Bus connection or `osascript` run, instead of reads back to back. The rules:
 
 | Situation | Behavior |
 | --- | --- |
@@ -320,6 +321,8 @@ After a read that reached a source (an item, nothing playing, or not available),
 | MPRIS `GetAll` per player | 500 ms | Player skipped |
 | MPRIS overall read | 2 s | `KindUnexpected` |
 | MPRIS signal subscription (watch mode) | 500 ms connect, 500 ms `AddMatch` | Watch mode polls only |
+| macOS change listener start (watch mode) | 2 s until the listener prints `ready` | Listener killed; watch mode polls only |
+| Change notifications stop, when watch mode returns | 1 s for the channel to close | `spmeta` exits anyway; on macOS the listener's heartbeat ends it within 5 s |
 | Web API request | 5 s | Retried once after 1 s, then `KindUnexpected` |
 | Token request (exchange or refresh) | 10 s | `KindUnexpected` |
 | Login callback wait | 180 s | `KindAuthRequired` |

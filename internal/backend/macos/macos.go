@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -40,12 +41,30 @@ type Backend struct {
 	readTimeout time.Duration
 	// permissionTimeout bounds CheckPermission.
 	permissionTimeout time.Duration
+	// listen returns the unstarted command that runs the change listener;
+	// tests replace it with a helper process.
+	listen func() *exec.Cmd
+	// notification is the distributed notification the listener observes.
+	notification string
+	// readyTimeout bounds the start of the change listener.
+	readyTimeout time.Duration
+	// heartbeat is the interval of the listener's tick lines.
+	heartbeat time.Duration
 }
 
 // New returns a Backend that runs programs through r and stamps results with
 // now.
 func New(r Runner, now func() time.Time) *Backend {
-	return &Backend{runner: r, now: now, readTimeout: readTimeout, permissionTimeout: permissionTimeout}
+	return &Backend{
+		runner:            r,
+		now:               now,
+		readTimeout:       readTimeout,
+		permissionTimeout: permissionTimeout,
+		listen:            listenerCommand,
+		notification:      spotifyNotification,
+		readyTimeout:      listenerReadyTimeout,
+		heartbeat:         listenerHeartbeat,
+	}
 }
 
 // Source identifies this backend.

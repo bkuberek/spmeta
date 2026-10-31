@@ -41,6 +41,13 @@ func (ExecRunner) ProcessRunning(ctx context.Context, name string) (bool, error)
 	return false, fmt.Errorf("pgrep: %w", err)
 }
 
+// listenerCommand returns the unstarted command that runs the change
+// listener: osascript running a JavaScript for Automation program read from
+// stdin.
+func listenerCommand() *exec.Cmd {
+	return exec.Command(osascriptBin, "-l", "JavaScript", "-")
+}
+
 // RunScript runs osascript with the script on stdin and returns stdout and
 // stderr separately. A nonzero exit is returned as err.
 func (ExecRunner) RunScript(ctx context.Context, script string) (stdout, stderr []byte, err error) {
