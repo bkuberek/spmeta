@@ -70,9 +70,19 @@ The [decision index](./decisions/README.md) lists all ADRs and their status. ADR
 | [spmeta-banner.svg](./assets/spmeta-banner.svg) | Project banner (1600×800), editable source |
 | [spmeta-banner.png](./assets/spmeta-banner.png) | Project banner rendered from the SVG; used by the top-level README and as the GitHub social preview |
 | [spmeta-mark.svg](./assets/spmeta-mark.svg) | Monochrome mark: a play triangle in square brackets; uses `currentColor` |
+| [demo.gif](./assets/demo.gif) | Terminal demo for the top-level README: `spmeta` reading a mock MPRIS player, then `--watch` following a track change; generated, not edited by hand |
+| [demo/](./assets/demo/) | Source of the demo: `demo.tape` (VHS script), `Dockerfile`, `record.sh`, `session.sh`, and `mockplayer/` (fictional MPRIS player, built with the `demo` tag) |
 
 To regenerate the PNG after editing the banner SVG, run:
 
 ```bash
 rsvg-convert -o docs/assets/spmeta-banner.png docs/assets/spmeta-banner.svg
 ```
+
+To regenerate the demo GIF, run the following from the repository root. It needs Docker only; the build, the mock player, and the recording all run in containers on a private D-Bus session, so no Spotify account or desktop session is involved:
+
+```bash
+docs/assets/demo/record.sh
+```
+
+The image is based on `ghcr.io/charmbracelet/vhs:v0.11.0`. VHS v0.12.0 produced no output in this setup, so do not bump the tag without checking that the GIF is written.
