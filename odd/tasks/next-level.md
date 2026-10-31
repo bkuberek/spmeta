@@ -46,7 +46,7 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
 - [x] N7 — README demo GIF.
   - Decision (2026-10-30, user approved the recommendation): record in Docker with VHS against the mock MPRIS player from the integration tests, with neutral sample tracks, so the demo is real `spmeta` output, reproducible, and free of the user's listening history.
   - Acceptance: a VHS tape and a script that rebuild `docs/assets/demo.gif`, showing `spmeta`, `--format json`, and `--watch` picking up a track change; linked from the README.
-- [ ] N8 — Live trust checks with the user (tracked in a GitHub issue; done when the user is at the Mac).
+- [x] N8 — Live trust checks with the user (tracked in a GitHub issue; done when the user is at the Mac).
   - T10 manual rows (podcast, ad, local file, Spotify quit, Automation denied, Linux players), exit 5 (revoked access) and exit 6 (removed from the allowlist). Results recorded in this document and in `odd/tasks/spmeta-v1.md`.
 
 ## Order and routes
@@ -76,6 +76,7 @@ Strategy: two PRs, approved by the user on 2026-10-30 as an exception to `single
 - PR 1 opened: https://github.com/bkuberek/spmeta/pull/7 (CI 8/8 green). Issue #8 holds N8. Branch auto-delete enabled. Release-please token option committed on `feat/macos-events` as 9d68efc (falls back to `GITHUB_TOKEN` until `RELEASE_PLEASE_TOKEN` exists).
 - N5 (delegated writer; risk high → verifier PASS, then follow-ups by the same writer): macOS backend implements `Notifier` with a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged`; sends no Apple events, so it never launches Spotify. `runWatch` waits up to 1 s for the notifier to stop; a 5 s heartbeat makes the listener exit after SIGKILL or SIGHUP of spmeta (measured 3 s). End-to-end test posts only `dev.spmeta.test.*` names and skips on CI timeout. ADR 0010 Accepted.
 - N7 (delegated writer; risk high → verifier PASS; three nits fixed by the parent): `docs/assets/demo/record.sh` builds the real Linux `spmeta` and a `//go:build demo` mock MPRIS player, then records `docs/assets/demo.gif` (166 KB, 24.5 s) with VHS v0.11.0 under `dbus-run-session`. Fictional tracks; trackids produce no Spotify URIs. Frames inspected. VHS v0.12.0 writes no output, hence the pin.
+- N8 (live, with the user, 2026-10-31; results in issue #8): Spotify's `PlaybackStateChanged` fires on play, skip, pause, and quit, and `--watch` printed 0.3–0.4 s later with a 30 s poll, so N5 is verified live. Podcast, local file, Spotify quit (exit 4, not relaunched), and Automation denied (exit 6, doctor names iTerm) pass. Homebrew cask on Linux passes in `homebrew/brew`. Ad and nothing-loaded are not reproducible; Web exits 5 and 6 skipped by the maintainer; Linux desktop players open.
 
 ## Next step
 
