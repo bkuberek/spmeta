@@ -44,8 +44,9 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
 - [x] N6 — AUR and Nix distribution.
   - Acceptance: goreleaser `aurs` (package `spmeta-bin`) and `nix` (NUR repository) sections that skip upload when their secret is missing; `release-check` passes; README install section and `docs/design/release.md` updated; user setup steps listed.
 - [ ] N7 — README demo GIF.
-  - Acceptance: a VHS tape in `docs/assets/demo.tape` and the rendered `docs/assets/demo.gif` showing `spmeta`, `--format json`, and `--watch`; user reviews the GIF before commit.
-- [ ] N8 — Live trust checks with the user.
+  - Decision (2026-10-30, user approved the recommendation): record in Docker with VHS against the mock MPRIS player from the integration tests, with neutral sample tracks, so the demo is real `spmeta` output, reproducible, and free of the user's listening history.
+  - Acceptance: a VHS tape and a script that rebuild `docs/assets/demo.gif`, showing `spmeta`, `--format json`, and `--watch` picking up a track change; linked from the README.
+- [ ] N8 — Live trust checks with the user (tracked in a GitHub issue; done when the user is at the Mac).
   - T10 manual rows (podcast, ad, local file, Spotify quit, Automation denied, Linux players), exit 5 (revoked access) and exit 6 (removed from the allowlist). Results recorded in this document and in `odd/tasks/spmeta-v1.md`.
 
 ## Order and routes
@@ -60,7 +61,7 @@ N1, N2, N3, N4, N5 (delegated writers, one at a time), N6 (delegated writer), N7
 
 ## Delivery
 
-Strategy: `single-pr` (standing decision). Forecast: roughly 1,500 to 2,000 authored lines. Branch: `feat/next-level`.
+Strategy: two PRs, approved by the user on 2026-10-30 as an exception to `single-pr` for readiness, not size. PR 1 (`feat/next-level`): N1–N4, N6. PR 2 (`feat/macos-events`): N5 and N7. N8 is a GitHub issue. Forecast: roughly 1,500 to 2,000 authored lines. Branch: `feat/next-level`.
 
 ## Progress
 
