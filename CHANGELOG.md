@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/bkuberek/spmeta/compare/v0.2.0...v0.3.0) (2026-10-31)
+
+
+### Features
+
+* **cli:** add shell completions and a man page from one command reference ([2d0976d](https://github.com/bkuberek/spmeta/commit/2d0976d453712e43697f4894cfcf907290a4fbbf))
+* **format:** add the waybar output format and status-bar examples ([1f6e8c1](https://github.com/bkuberek/spmeta/commit/1f6e8c1396b269a45bffd8a2e82da7b7a81f15be))
+* **macos:** name the app macOS asks about for any terminal or status bar ([5812cc7](https://github.com/bkuberek/spmeta/commit/5812cc71d4347e4452fecc43bd39d82085350fe6))
+* **watch:** read at once when an MPRIS player signals a change on Linux ([cbca5bb](https://github.com/bkuberek/spmeta/commit/cbca5bbca0ae3411ac0995c2314737fe83cf7ebf))
+* **watch:** read at once when Spotify signals a change on macOS ([bbc8a07](https://github.com/bkuberek/spmeta/commit/bbc8a07b10246f90c936c8a5b15d9e98818d10df))
+
+
+### Bug Fixes
+
+* **doctor:** check the Web login even when the config file is invalid ([df33cd5](https://github.com/bkuberek/spmeta/commit/df33cd546a35349d60ed616d21ca56787dab7e5e))
+
 ## [0.2.0](https://github.com/bkuberek/spmeta/compare/v0.1.0...v0.2.0) (2026-10-29)
 
 
