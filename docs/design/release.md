@@ -44,7 +44,7 @@ release-please (on every push to main)
   opens or updates the release pull request:
   CHANGELOG.md section + version bump in .release-please-manifest.json
   |
-  |  a maintainer reviews and merges the release pull request (admin merge, see below)
+  |  a maintainer reviews and merges the release pull request (see below)
   v
 release-please creates tag vX.Y.Z and the GitHub Release (notes = the CHANGELOG section)
   |
@@ -63,7 +63,7 @@ goreleaser release --clean (checks out the tag)
 
 goreleaser runs as a second job of the release-please workflow because tags created with the workflow's `GITHUB_TOKEN` do not trigger other workflows. Its changelog is disabled, so `CHANGELOG.md` and the release-please notes are the single source of truth.
 
-The release pull request is opened with the workflow's `GITHUB_TOKEN`, and GitHub does not start workflows for events caused by that token. CI therefore never runs on the release pull request, and the required checks on `main` never report on it. The maintainer reviews it and merges it with `gh pr merge --admin --rebase <number>`. This is safe because the release pull request changes only `CHANGELOG.md` and `.release-please-manifest.json`, and CI already passed on every commit it describes. A personal access token for release-please is deliberately not used.
+release-please authenticates with the secret `RELEASE_PLEASE_TOKEN` when it exists, and with the workflow's `GITHUB_TOKEN` otherwise. GitHub does not start workflows for events caused by `GITHUB_TOKEN`, so with that token CI never runs on the release pull request and its required checks never report; the maintainer then merges it with `gh pr merge --admin --rebase <number>`, which is safe because the release pull request changes only `CHANGELOG.md` and `.release-please-manifest.json`. With `RELEASE_PLEASE_TOKEN`, the release pull request runs CI like any other pull request and merges with `gh pr merge --rebase <number>`. The token is a fine-grained personal access token limited to `bkuberek/spmeta` with Contents, Pull requests, and Issues set to read and write (release-please labels its pull requests); create it at <https://github.com/settings/personal-access-tokens/new> and store it with `gh secret set RELEASE_PLEASE_TOKEN --repo bkuberek/spmeta`. The token expires at the end of the lifetime chosen at creation. An expired token is still a non-empty secret, so the release-please job fails instead of falling back; renew the token, or delete the secret to return to the `GITHUB_TOKEN` behavior.
 
 ## Files created in task T15
 
@@ -230,7 +230,7 @@ Before merging a release pull request:
 2. Confirm the manual matrix rows for the shipped backends are recorded ([testing.md](./testing.md)).
 3. Read the release pull request's `CHANGELOG.md` section; if a change is missing or misclassified, fix it with a follow-up commit (for example a `fix:` commit), not by editing the changelog.
 4. Confirm the version bump matches the table in Versioning, in particular that breaking changes before 1.0.0 bump the minor version.
-5. Merge the release pull request with `gh pr merge --admin --rebase <number>`; its required checks never run (see Release flow).
+5. Merge the release pull request with `gh pr merge --rebase <number>` after its checks pass; without `RELEASE_PLEASE_TOKEN` its checks never run, so use `gh pr merge --admin --rebase <number>` (see Release flow).
 6. For the first release, confirm the pull request proposes v0.1.0 (the `Release-As: 0.1.0` footer).
 
 After the release workflow finishes:
