@@ -14,6 +14,7 @@ import (
 	"github.com/bkuberek/spmeta/internal/backend/local"
 	"github.com/bkuberek/spmeta/internal/config"
 	"github.com/bkuberek/spmeta/internal/doctor"
+	"github.com/bkuberek/spmeta/internal/hostapp"
 )
 
 // newDoctorFlags returns the flags of doctor, which internal/reference
@@ -59,15 +60,15 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, inf
 	b := newLocal(local.Settings{Player: settings.Player})
 	log := debugLogger(*debug, stderr)
 	o := doctor.Options{
-		Version:  info.Version,
-		OS:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		Config:   configReport(settings, loadErr, opts.env),
-		Terminal: getenv(opts.env, "TERM_PROGRAM"),
-		Out:      stdout,
-		Notice:   stderr,
-		Log:      log,
-		Web:      webReport(settings, opts, info, log),
+		Version: info.Version,
+		OS:      runtime.GOOS,
+		Arch:    runtime.GOARCH,
+		Config:  configReport(settings, loadErr, opts.env),
+		HostApp: hostApp(opts, log),
+		Out:     stdout,
+		Notice:  stderr,
+		Log:     log,
+		Web:     webReport(settings, opts, info, log),
 	}
 	o.MacOS, _ = b.(doctor.MacOSChecker)
 	o.MPRIS, _ = b.(doctor.PlayerLister)
@@ -77,6 +78,18 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, inf
 		return backend.ExitCode(backend.KindOf(err))
 	}
 	return exitOK
+}
+
+// hostApp returns doctor's lookup of the app macOS asks about, which runs
+// only when doctor needs the name.
+func hostApp(opts options, log *slog.Logger) func(context.Context) string {
+	return func(ctx context.Context) string {
+		term := getenv(opts.env, "TERM_PROGRAM")
+		if opts.hostApp != nil {
+			return opts.hostApp(ctx, term)
+		}
+		return hostapp.Resolve(ctx, term, log)
+	}
 }
 
 // configReport tells doctor how the configuration resolved. It looks for the

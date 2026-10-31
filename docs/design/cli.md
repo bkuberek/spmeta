@@ -157,7 +157,7 @@ Complete Waybar configuration and styling files are in [examples/waybar](../../e
 | 3 | A source is reachable but nothing is loaded, or no Web device is active |
 | 4 | No source available: Spotify not running, no MPRIS player, no session bus, not logged in to Web, unsupported platform |
 | 5 | Web authentication required: refresh failed, token file unreadable, login aborted or timed out. Run `spmeta auth login` |
-| 6 | Permission denied: macOS Automation not granted, or Web 403 (not on the app's allowlist, or the app owner's Premium lapsed) |
+| 6 | Permission denied: macOS Automation not granted (the hint names the app to allow), or Web 403 (not on the app's allowlist, or the app owner's Premium lapsed) |
 | 7 | Rate limited by the Web API and gave up |
 
 Every non-zero exit prints one `spmeta: <message>` line on stderr, optionally followed by a `hint: <next step>` line; this includes exit 3, while stdout stays as described under Output formats. `--quiet` suppresses both lines, except for usage errors (exit 2).
@@ -255,7 +255,7 @@ Each line starts with the check name, padded to 8 columns, and one of `ok`, `una
 | Check | What it does |
 | --- | --- |
 | `config` | Resolves the path; parses the file; lists unknown keys. A configuration that cannot be loaded (invalid TOML or value, or a missing file named by `--config`) is reported as `error` with the message `config.Load` produces; it does not stop the other checks and does not change the exit code |
-| `macos` (macOS) | Runs the process check. If Spotify is running, sends a minimal Apple event with a 120 s timeout and prints "macOS may ask to allow <terminal> to control Spotify; click OK." to stderr before sending. `<terminal>` comes from `TERM_PROGRAM` (`Apple_Terminal` as Terminal, a trailing `.app` dropped), or reads "the app that runs spmeta" when it is unset. Reports `ok` when granted, `denied` (with the System Settings path), or `error` when no answer arrives or the check fails. If Spotify is not running, reports `unavailable` because permission cannot be checked without launching it, and does not launch it |
+| `macos` (macOS) | Runs the process check. If Spotify is running, sends a minimal Apple event with a 120 s timeout and prints "macOS may ask to allow <terminal> to control Spotify; click OK." to stderr before sending. `<terminal>` is the app macOS attributes the prompt to, found from the parent process chain and then `TERM_PROGRAM` ([backend-macos.md](./backend-macos.md#host-application)), and reads "the app that runs spmeta" when neither answers. The `denied` line and the exit-6 hint of a normal read name the same app. Reports `ok` when granted, `denied` (with the System Settings path), or `error` when no answer arrives or the check fails. If Spotify is not running, reports `unavailable` because permission cannot be checked without launching it, and does not launch it |
 | `mpris` (Linux) | Resolves the session bus address, lists MPRIS players one per detail line, marks the one `spmeta` would select (the `player` setting, else the usual preference order), and shows `no answer` for a player whose `GetAll` failed. `ok` needs a selected player; no bus, no players, or no Spotify client is `unavailable` |
 | `local` (other platforms) | Reports `unavailable`: this platform is not supported |
 | `web` | Without a token file, reports `not configured` and makes no request. With one, performs one `GET /v1/me/player` (a rate limit is not waited out) and reports `ok` when Spotify answered, including "no device is active" (204); `denied` for a 403; `unavailable` when the token file disappears meanwhile; and `error` for anything else (login rejected or expired, network failure, server error, rate limit), with the message and hint. Detail lines give the estimated refresh-token expiry and, when the token file mode allows group or other access, the `chmod 600` command. The item itself is never printed |
@@ -376,7 +376,7 @@ Style the `playing`, `paused`, `stopped`, and `none` classes in `style.css`. The
 
 ### SketchyBar
 
-A plugin script that updates an item's label. SketchyBar becomes the responsible process for the macOS Automation prompt, so run `spmeta doctor` once from a terminal and allow SketchyBar when macOS asks:
+A plugin script that updates an item's label. SketchyBar becomes the responsible process for the macOS Automation prompt, and the permission belongs to that app alone: allowing your terminal does not cover it. Let the plugin run once with Spotify playing and allow SketchyBar when macOS asks (see [macOS permission](../../README.md#macos)):
 
 ```bash
 #!/usr/bin/env bash

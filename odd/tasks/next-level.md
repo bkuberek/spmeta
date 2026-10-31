@@ -49,6 +49,10 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
 - [x] N8 — Live trust checks with the user (tracked in a GitHub issue; done when the user is at the Mac).
   - T10 manual rows (podcast, ad, local file, Spotify quit, Automation denied, Linux players), exit 5 (revoked access) and exit 6 (removed from the allowlist). Results recorded in this document and in `odd/tasks/spmeta-v1.md`.
 
+- [x] N9 — Name the app macOS asks about, for any terminal or status bar.
+  - Problem: `doctor` guesses the app from `TERM_PROGRAM` (`internal/doctor/doctor.go:292`), which is wrong for Warp, VS Code, Ghostty (case), tmux, kitty, Alacritty, and status bars; the exit-6 error always says "for example Terminal".
+  - Acceptance: walk the parent process chain (via `ps`, no new dependency) to the first `.app` bundle and use its name; fall back to a corrected `TERM_PROGRAM` table, then a generic message; use the same name in the exit-6 hint and in `doctor`; README explains that the permission is per app (each terminal and each status bar). Added 2026-10-30 at the user's request, delivered on PR #9.
+
 ## Order and routes
 
 N1, N2, N3, N4, N5 (delegated writers, one at a time), N6 (delegated writer), N7 and N8 (need the user). Route per task is recorded under Progress.
@@ -77,6 +81,7 @@ Strategy: two PRs, approved by the user on 2026-10-30 as an exception to `single
 - N5 (delegated writer; risk high → verifier PASS, then follow-ups by the same writer): macOS backend implements `Notifier` with a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged`; sends no Apple events, so it never launches Spotify. `runWatch` waits up to 1 s for the notifier to stop; a 5 s heartbeat makes the listener exit after SIGKILL or SIGHUP of spmeta (measured 3 s). End-to-end test posts only `dev.spmeta.test.*` names and skips on CI timeout. ADR 0010 Accepted.
 - N7 (delegated writer; risk high → verifier PASS; three nits fixed by the parent): `docs/assets/demo/record.sh` builds the real Linux `spmeta` and a `//go:build demo` mock MPRIS player, then records `docs/assets/demo.gif` (166 KB, 24.5 s) with VHS v0.11.0 under `dbus-run-session`. Fictional tracks; trackids produce no Spotify URIs. Frames inspected. VHS v0.12.0 writes no output, hence the pin.
 - N8 (live, with the user, 2026-10-31; results in issue #8): Spotify's `PlaybackStateChanged` fires on play, skip, pause, and quit, and `--watch` printed 0.3–0.4 s later with a 30 s poll, so N5 is verified live. Podcast, local file, Spotify quit (exit 4, not relaunched), and Automation denied (exit 6, doctor names iTerm) pass. Homebrew cask on Linux passes in `homebrew/brew`. Ad and nothing-loaded are not reproducible; Web exits 5 and 6 skipped by the maintainer; Linux desktop players open.
+- N9 (delegated writer; risk high → verifier PASS, resolving iTerm through zsh, script, and env -i chains; parent added the `LC_TERMINAL=iTerm2` fallback for tmux test-first, stubbed `ps` in the doctor exit-code test, and fixed the SketchyBar wording in examples): `internal/hostapp` walks one `ps` snapshot to the outermost `.app` bundle, then a launchd-rooted non-shell host (SketchyBar), then a corrected `TERM_PROGRAM` table, then generic wording. Used by `doctor` and the exit-6 hint, only on the denied path.
 
 ## Next step
 

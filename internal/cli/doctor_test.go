@@ -60,7 +60,8 @@ func runDoctor(t *testing.T, b backend.Backend, env config.Env, args ...string) 
 	t.Helper()
 	var out, errOut bytes.Buffer
 	code = cli.Run(context.Background(), append([]string{"doctor"}, args...), &out, &errOut,
-		cli.BuildInfo{Version: "0.1.0"}, cli.WithBackend(b), cli.WithEnv(env))
+		cli.BuildInfo{Version: "0.1.0"}, cli.WithBackend(b), cli.WithEnv(env),
+		cli.WithHostApp(func(context.Context, string) string { return "Terminal" }))
 	return code, out.String(), errOut.String()
 }
 
@@ -227,20 +228,63 @@ func TestDoctorPassesPlayerToTheBackend(t *testing.T) {
 	}
 }
 
-func TestDoctorNoticeNamesTheTerminal(t *testing.T) {
-	mac := grantedMac()
-	mac.prompts = true
-	env := doctorEnv(nil, map[string]string{"TERM_PROGRAM": "Apple_Terminal"})
-	code, stdout, stderr := runDoctor(t, mac, env)
-	if code != 0 {
-		t.Fatalf("exit = %d (stderr %q)", code, stderr)
+func TestDoctorNamesTheHostApp(t *testing.T) {
+	tests := []struct {
+		name       string
+		result     macos.PermissionResult
+		app        string
+		wantNotice string
+		wantLine   string
+		wantCode   int
+	}{
+		{
+			"notice",
+			macos.PermissionResult{State: macos.PermissionGranted},
+			"Ghostty",
+			"macOS may ask to allow Ghostty to control Spotify; click OK.\n", "", 0,
+		},
+		{
+			"denied",
+			macos.PermissionResult{State: macos.PermissionDenied},
+			"iTerm",
+			"macOS may ask to allow iTerm to control Spotify; click OK.\n",
+			"macos   denied: macOS did not allow iTerm to control Spotify.", 4,
+		},
+		{
+			"unknown",
+			macos.PermissionResult{State: macos.PermissionGranted},
+			"",
+			"macOS may ask to allow the app that runs spmeta to control Spotify; click OK.\n", "", 0,
+		},
 	}
-	const notice = "macOS may ask to allow Terminal to control Spotify; click OK.\n"
-	if stderr != notice {
-		t.Errorf("stderr = %q, want %q", stderr, notice)
-	}
-	if strings.Contains(stdout, "click OK") {
-		t.Errorf("the notice belongs on stderr, not in the report:\n%s", stdout)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mac := &macFake{result: tc.result, prompts: true}
+			var out, errOut bytes.Buffer
+			var gotTerm string
+			resolve := func(_ context.Context, termProgram string) string {
+				gotTerm = termProgram
+				return tc.app
+			}
+			code := cli.Run(context.Background(), []string{"doctor"}, &out, &errOut, cli.BuildInfo{},
+				cli.WithBackend(mac), cli.WithHostApp(resolve),
+				cli.WithEnv(doctorEnv(nil, map[string]string{"TERM_PROGRAM": "Apple_Terminal"})))
+			if code != tc.wantCode {
+				t.Fatalf("exit = %d, want %d (stderr %q)", code, tc.wantCode, errOut.String())
+			}
+			if gotTerm != "Apple_Terminal" {
+				t.Errorf("resolver got TERM_PROGRAM %q, want Apple_Terminal", gotTerm)
+			}
+			if !strings.HasPrefix(errOut.String(), tc.wantNotice) {
+				t.Errorf("stderr = %q, want it to start with %q", errOut.String(), tc.wantNotice)
+			}
+			if tc.wantLine != "" && !strings.Contains(out.String(), tc.wantLine) {
+				t.Errorf("stdout lacks %q:\n%s", tc.wantLine, out.String())
+			}
+			if strings.Contains(out.String(), "click OK") {
+				t.Errorf("the notice belongs on stderr, not in the report:\n%s", out.String())
+			}
+		})
 	}
 }
 

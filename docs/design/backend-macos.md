@@ -157,7 +157,7 @@ When `osascript` exits nonzero, the backend extracts the error number from the l
 | --- | --- | --- | --- |
 | `pgrep` reports not running | `NotAvailable` | Spotify is not running. | none |
 | `pgrep` fails or times out | `Unexpected` | could not check whether Spotify is running | none |
-| Error -1743 | `PermissionDenied` | macOS did not allow this app to control Spotify. | Allow it in System Settings > Privacy & Security > Automation, under the app that runs spmeta (for example Terminal), then run `spmeta doctor`. |
+| Error -1743 | `PermissionDenied` | macOS did not allow this app to control Spotify. | Allow it in System Settings > Privacy & Security > Automation, under the host app (see [Host application](#host-application)), or "the app that runs spmeta" when it is unknown, then run `spmeta doctor`. |
 | Error -600 | `NotAvailable` | Spotify is not running. | none |
 | Error -1712 (Apple event timed out) | `Unexpected` | Spotify did not respond. | Run `spmeta doctor`. |
 | 2 s deadline exceeded | `Unexpected` | Spotify did not respond within 2s. | If this is the first run, macOS may be waiting for you to allow Automation access: run `spmeta doctor`. |
@@ -181,7 +181,19 @@ tell application id "com.spotify.client" to return (player state as string)
 | Timeout | `error`: no answer within 120 s |
 | Spotify not running | `unavailable`: cannot check permission without launching Spotify; start Spotify and run `spmeta doctor` again |
 
-macOS attributes the prompt to the responsible process. Under SketchyBar or another launchd agent, the prompt names that app; `doctor` prints the value of `TERM_PROGRAM` when set, to help the user find the right entry in System Settings.
+macOS attributes the prompt to the responsible process, so the permission belongs to one app: each terminal and each status bar such as SketchyBar has its own entry in System Settings. Allowing Terminal does not allow iTerm.
+
+## Host application
+
+`doctor` and the exit-6 hint name that app so the user can find the right entry. `internal/hostapp` resolves the name, best-effort, and only when a message needs it: a successful read never runs it.
+
+1. **Process chain.** One `/bin/ps -axo pid=,ppid=,comm=` run (1 s limit) gives the process table. The walk starts at spmeta's parent and goes up through `ppid`, at most 64 hops, and stops at pid 1 (launchd), a missing pid, or a repeated pid.
+2. **App bundle.** The first ancestor whose executable path contains `.app/Contents/MacOS/` names the host: the directory of the outermost `.app` in the path, without the suffix. Helpers nested in another app resolve to the outer app (`Visual Studio Code.app/.../Code Helper.app/...` is Visual Studio Code); `iTerm.app` is iTerm.
+3. **No bundle.** When the walk reaches launchd without finding a bundle, the outermost ancestor that is not a shell or similar (`sh`, `bash`, `zsh`, `fish`, `dash`, `tmux`, `screen`, `login`, `sudo`, `env`, `go`, `spmeta`, and a few more) names the host, by executable name: `sketchybar` for a SketchyBar plugin. A tmux server is daemonized, so its chain holds only skipped names and gives no answer. A broken chain or a cycle gives no answer.
+4. **`TERM_PROGRAM`.** When ps fails or the chain gives no answer: `Apple_Terminal` is Terminal, `iTerm.app` is iTerm, `ghostty` is Ghostty, `WarpTerminal` is Warp, `vscode` is Visual Studio Code, `WezTerm` is WezTerm, and `tmux` gives no answer because tmux hides the terminal, unless `LC_TERMINAL=iTerm2` (set by iTerm and kept inside tmux) names iTerm. Any other value is used as is without a trailing `.app`.
+5. **Generic wording.** With no answer, messages say "the app that runs spmeta".
+
+A `ps` failure falls back silently (a `--debug` line in `doctor`); it never changes an exit code. The unit tests feed fake `ps` output to the pure walker, and one darwin-only test runs the real `ps`.
 
 ## Change notifications
 

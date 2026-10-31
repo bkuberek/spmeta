@@ -60,7 +60,10 @@ func (f *fakeRunner) RunScript(ctx context.Context, script string) ([]byte, []by
 }
 
 func newBackend(r Runner) *Backend {
-	return New(r, func() time.Time { return fetchedAt })
+	b := New(r, func() time.Time { return fetchedAt })
+	// Tests never run ps: the host app is unknown unless a test sets it.
+	b.hostApp = func(context.Context) string { return "" }
+	return b
 }
 
 func wantBase() model.NowPlaying {
@@ -374,7 +377,7 @@ func TestReadProcessCheckFailure(t *testing.T) {
 }
 
 const (
-	wantHintAutomation = "Allow it in System Settings > Privacy & Security > Automation, under the app that runs spmeta (for example Terminal), then run `spmeta doctor`."
+	wantHintAutomation = "Allow it in System Settings > Privacy & Security > Automation, under the app that runs spmeta, then run `spmeta doctor`."
 	wantHintDoctor     = "Run `spmeta doctor`."
 	wantHintFirstRun   = "If this is the first run, macOS may be waiting for you to allow Automation access: run `spmeta doctor`."
 )
@@ -429,6 +432,33 @@ func TestReadScriptFailures(t *testing.T) {
 				t.Errorf("error does not wrap the runner error: %v", err)
 			}
 		})
+	}
+}
+
+func TestReadDeniedHintNamesTheHostApp(t *testing.T) {
+	t.Parallel()
+	exitErr := errors.New("exit status 1")
+	const want = "Allow it in System Settings > Privacy & Security > Automation, under iTerm, then run `spmeta doctor`."
+	calls := 0
+	b := newBackend(&fakeRunner{running: true, stderr: fixture(t, "stderr-1743.txt"), scriptErr: exitErr})
+	b.hostApp = func(context.Context) string { calls++; return "iTerm" }
+	_, err := b.Read(context.Background())
+	assertError(t, err, backend.KindPermissionDenied, "macOS did not allow this app to control Spotify.", want)
+	if calls != 1 {
+		t.Errorf("host app resolved %d times, want 1", calls)
+	}
+}
+
+func TestReadResolvesTheHostAppOnlyWhenDenied(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	b := newBackend(&fakeRunner{running: true, stdout: fixture(t, "track-playing.txt")})
+	b.hostApp = func(context.Context) string { calls++; return "iTerm" }
+	if _, err := b.Read(context.Background()); err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("host app resolved %d times on a successful read, want 0", calls)
 	}
 }
 

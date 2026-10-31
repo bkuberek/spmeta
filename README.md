@@ -192,7 +192,7 @@ set -g status-right '#(spmeta --template "{state_icon} {artist} - {title}" 2>/de
 }
 ```
 
-**SketchyBar** polls from a plugin script. The first run needs the macOS permission described [below](#macos): run `spmeta doctor` once from a terminal and allow SketchyBar when macOS asks.
+**SketchyBar** polls from a plugin script. The first run needs the macOS permission described [below](#macos), and it belongs to SketchyBar itself: allowing your terminal does not cover it.
 
 ```bash
 #!/usr/bin/env bash
@@ -219,11 +219,13 @@ Copy-paste configurations for Waybar, SketchyBar, and tmux are in [examples](exa
 
 ## macOS
 
-`spmeta` asks Spotify.app for the current track through AppleScript, so macOS requires a one-time Automation permission for the app that runs `spmeta` (Terminal, iTerm, SketchyBar, and so on).
+`spmeta` asks Spotify.app for the current track through AppleScript, so macOS requires a one-time Automation permission for the app that runs `spmeta` (Terminal, iTerm, Ghostty, Warp, VS Code, SketchyBar, and so on).
 
 1. Start Spotify.
 2. Run `spmeta doctor` in a terminal. macOS shows a prompt; click OK. `doctor` waits up to 120 s for your answer.
 3. The `macos` line should read `ok`.
+
+The permission is per app: each terminal and each status bar has its own entry under System Settings > Privacy & Security > Automation. `doctor` and the exit 6 error name the app macOS asks about (found from the process that launched `spmeta`). Run `spmeta doctor` from the app that will run `spmeta`. For a status bar such as SketchyBar, let its plugin run `spmeta` once with Spotify playing, so macOS asks about the status bar itself.
 
 ```text
 spmeta 0.1.0 (darwin/arm64)

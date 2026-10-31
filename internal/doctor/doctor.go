@@ -30,7 +30,7 @@ const (
 	nameWidth          = 8 // width of the check-name column
 	continuationIndent = "        "
 	hintAgain          = "run 'spmeta doctor' again"
-	unknownTerminal    = "the app that runs spmeta"
+	unknownHostApp     = "the app that runs spmeta"
 	permissionWait     = "120 s" // macos.CheckPermission waits this long for the consent prompt
 	dateLayout         = "2006-01-02"
 )
@@ -77,7 +77,10 @@ type Options struct {
 	MacOS    MacOSChecker // nil when the platform has no macOS backend
 	MPRIS    PlayerLister // nil when the platform has no MPRIS backend
 	Web      WebReport
-	Terminal string // TERM_PROGRAM, to name the app macOS asks about
+	// HostApp names the app macOS asks about (see package hostapp); nil or ""
+	// means unknown. Run calls it at most once, and only when a message needs
+	// the name.
+	HostApp func(ctx context.Context) string
 
 	Out    io.Writer    // the report
 	Notice io.Writer    // progress notes shown while a check waits
@@ -125,6 +128,23 @@ func Run(ctx context.Context, o Options) error {
 type reporter struct {
 	o   Options
 	log *slog.Logger
+	app *string // memoized host app name
+}
+
+// hostApp returns the name macOS shows for the app that runs spmeta, looked up
+// on first use.
+func (r *reporter) hostApp(ctx context.Context) string {
+	if r.app == nil {
+		name := ""
+		if r.o.HostApp != nil {
+			name = r.o.HostApp(ctx)
+		}
+		if name == "" {
+			name = unknownHostApp
+		}
+		r.app = &name
+	}
+	return *r.app
 }
 
 func (r *reporter) printf(format string, args ...any) {
@@ -169,10 +189,9 @@ func (r *reporter) config(c ConfigReport) {
 }
 
 func (r *reporter) macOS(ctx context.Context) bool {
-	terminal := terminalName(r.o.Terminal)
 	notice := func() {
 		if r.o.Notice != nil {
-			_, _ = fmt.Fprintf(r.o.Notice, "macOS may ask to allow %s to control Spotify; click OK.\n", terminal)
+			_, _ = fmt.Fprintf(r.o.Notice, "macOS may ask to allow %s to control Spotify; click OK.\n", r.hostApp(ctx))
 		}
 	}
 	res := r.o.MacOS.CheckPermission(ctx, notice)
@@ -183,7 +202,7 @@ func (r *reporter) macOS(ctx context.Context) bool {
 	case macos.PermissionDenied:
 		r.line("macos", statusDenied, fmt.Sprintf(
 			"macOS did not allow %s to control Spotify. Allow it in System Settings > Privacy & Security > Automation, then %s.",
-			terminal, hintAgain))
+			r.hostApp(ctx), hintAgain))
 	case macos.PermissionSpotifyNotRunning:
 		r.line("macos", statusUnavailable, fmt.Sprintf(
 			"Spotify is not running, so permission cannot be checked without launching it. Start Spotify and %s.", hintAgain))
@@ -285,17 +304,4 @@ func describe(err error) string {
 		return msg
 	}
 	return msg + ". " + be.Hint
-}
-
-// terminalName turns TERM_PROGRAM into the name macOS shows in its Automation
-// list, as far as it can be guessed.
-func terminalName(termProgram string) string {
-	switch termProgram {
-	case "":
-		return unknownTerminal
-	case "Apple_Terminal":
-		return "Terminal"
-	default:
-		return strings.TrimSuffix(termProgram, ".app")
-	}
 }
