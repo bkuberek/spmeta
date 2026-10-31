@@ -14,7 +14,12 @@ import (
 	"github.com/bkuberek/spmeta/internal/watch"
 )
 
-const defaultLocalInterval = time.Second
+const (
+	defaultLocalInterval = time.Second
+	// notifierStopTimeout bounds the wait for change notifications to stop
+	// when watch mode returns.
+	notifierStopTimeout = time.Second
+)
 
 // WithSleep replaces the waits between watch reads, before a Web retry and
 // during login. Tests use it to avoid real delays. A change notification does
@@ -52,10 +57,11 @@ func pollInterval(s config.Settings, flagGiven bool) time.Duration {
 // read at once; polling at interval continues either way.
 func runWatch(ctx context.Context, r watch.Reader, interval time.Duration, render renderFunc, stdout, stderr io.Writer, log *slog.Logger, o options) int {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // stops the notifier with the loop
+	wake := changes(ctx, r, log)
+	defer stopChanges(cancel, wake)
 	err := watch.Run(ctx, r, watch.Options{
 		Interval: interval,
-		Wake:     changes(ctx, r, log),
+		Wake:     wake,
 		Emit: func(np *model.NowPlaying) error {
 			out, err := render(np)
 			if err != nil {
@@ -91,6 +97,30 @@ func changes(ctx context.Context, r watch.Reader, log *slog.Logger) <-chan struc
 	}
 	log.Debug("change notifications on")
 	return wake
+}
+
+// stopChanges stops the notifier with the loop and waits, at most
+// notifierStopTimeout, until it closes its channel. The caller exits the
+// process right after watch mode returns, and the macOS notifier closes its
+// channel only once its listener process is killed and reaped, so returning
+// earlier would leave that process behind.
+func stopChanges(cancel context.CancelFunc, wake <-chan struct{}) {
+	cancel()
+	if wake == nil {
+		return
+	}
+	timeout := time.NewTimer(notifierStopTimeout)
+	defer timeout.Stop()
+	for {
+		select {
+		case _, ok := <-wake:
+			if !ok {
+				return
+			}
+		case <-timeout.C:
+			return
+		}
+	}
 }
 
 // watchSleep adapts a WithSleep replacement to the watch loop. The

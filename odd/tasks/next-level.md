@@ -38,7 +38,7 @@ Out of scope: release-flow simplification (options A/B/C still open), Windows (A
   - Acceptance: `spmeta completion bash|zsh|fish` prints a script; a man page `spmeta.1` is generated from one source of truth with the usage text; goreleaser ships both in archives, `.deb`/`.rpm`, and the Homebrew cask; a test keeps completions in sync with the flag sets.
 - [x] N4 — Event-driven `watch` on Linux.
   - Acceptance: the watch loop accepts an optional wake source; the MPRIS backend subscribes to `PropertiesChanged` on `/org/mpris/MediaPlayer2` over one persistent connection; a track change emits without waiting for the next poll; polling stays as the fallback and keeps `--interval` semantics; falls back to pure polling when subscription fails. Uses godbus only.
-- [ ] N5 — Event-driven `watch` on macOS, plus ADR 0010.
+- [x] N5 — Event-driven `watch` on macOS, plus ADR 0010.
   - Approach under probe: a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged` (no cgo, no new dependency). Listener never sends Apple events to Spotify, so it never launches it.
   - Acceptance: ADR 0010 records the event design for both platforms; listener lifecycle is tied to the watch context; falls back to polling when the listener fails.
 - [x] N6 — AUR and Nix distribution.
@@ -72,6 +72,9 @@ Strategy: two PRs, approved by the user on 2026-10-30 as an exception to `single
 - N4 (delegated writer; risk high → verifier PASS, then two follow-ups by the same writer): `backend.Notifier` and `Coalesce`; watch waits can be woken (`Wake`, `MinWakeGap` 100 ms flood guard; Retry-After and backoff waits cannot be shortened; a closed channel falls back to polling); `Resolver.Changes` passes through to the local backend; MPRIS notifier on one persistent godbus connection (PropertiesChanged and NameOwnerChanged, signal-name filter for godbus unicast signals). Real-bus integration test in the golang container passes. No reconnect after a session-bus restart (documented).
 - N6 (delegated writer; risk high → verifier PASS with empty secrets in a scratch non-snapshot release; three doc fixes by the parent): goreleaser `aurs` (`spmeta-bin`) and `nix` (`bkuberek/nur-packages`) gated by `skip_upload` on `AUR_KEY` and `NUR_GITHUB_TOKEN`; release.yml passes both secrets. Publish order in v2.19.0: GitHub Release, Nix, cask, AUR. User setup steps are in `docs/design/release.md#aur-and-nix-one-time-setup`.
 - macOS notification probe: listener registers, but two runs (5 and 10 minutes) saw no events while Spotify was paused. Needs a live play/skip by the user before N5.
+- 2026-10-30: JXA delivery proven with a private notification name (`dev.spmeta.probe`): received within a second, about 29 MB idle, 0.0% CPU. Spotify's own notification is still unobserved live (issue #8).
+- PR 1 opened: https://github.com/bkuberek/spmeta/pull/7 (CI 8/8 green). Issue #8 holds N8. Branch auto-delete enabled. Release-please token option committed on `feat/macos-events` as 9d68efc (falls back to `GITHUB_TOKEN` until `RELEASE_PLEASE_TOKEN` exists).
+- N5 (delegated writer; risk high → verifier PASS, then follow-ups by the same writer): macOS backend implements `Notifier` with a long-lived `osascript -l JavaScript` listener for `com.spotify.client.PlaybackStateChanged`; sends no Apple events, so it never launches Spotify. `runWatch` waits up to 1 s for the notifier to stop; a 5 s heartbeat makes the listener exit after SIGKILL or SIGHUP of spmeta (measured 3 s). End-to-end test posts only `dev.spmeta.test.*` names and skips on CI timeout. ADR 0010 Accepted.
 
 ## Next step
 

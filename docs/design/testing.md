@@ -11,14 +11,14 @@ Every implementation task is test-first: write the failing test (RED), implement
 | Model | `Normalize`, `ParseURI`, `OpenURL`, `FormatDuration` | Table-driven unit tests |
 | Formatters | Text, JSON, template rendering; template parse errors; control-character sanitizing | Golden files; every golden JSON validated against the schema |
 | Configuration | Precedence of flags, environment, file, defaults; invalid values; unknown keys | Table-driven, with injected `env` and `readFile` |
-| macOS backend | Parser and error mapping | Fake `Runner` returning fixture stdout, stderr, and errors |
+| macOS backend | Parser and error mapping; `Changes` (a wake per `changed` line, other lines ignored, the channel closing when the listener exits, the listener killed and reaped when the context ends, the ready timeout, an exit before `ready` with its stderr, an unreadable line before `ready` with the read error); the listener script (notification name as a string literal, heartbeat interval, no Apple events) | Fake `Runner` returning fixture stdout, stderr, and errors; the test binary as a helper process standing in for `osascript`. On macOS only, with the real `osascript`: the listener observing a private random name (`dev.spmeta.test.<random>`) that a second `osascript` posts, never a Spotify notification, re-posted every 250 ms for up to 10 s and skipped on a timeout when `CI` is set; and a listener with a 200 ms heartbeat that must exit within 2 s after its parent, a helper process, is killed |
 | MPRIS backend | Selection, mapping, track ID normalization, position rule; `Changes` (forwarding, closing on context end, start errors) | Fake `Bus` returning fixture `Properties`; a fake bus that also delivers signals |
 | MPRIS adapter | Session bus address resolution and variant conversion (pure functions, every OS); godbus calls; signal match rules | Table-driven unit tests; integration test under `dbus-run-session` (Linux CI only) with a mock player that emits `PropertiesChanged` |
 | Web auth | PKCE vectors, login server, token file, refresh, lock | `httptest.Server`, injected clock and opener, temporary directories |
 | Web backend | Response table, retries, rate limits, mapping | `httptest.Server` serving fixtures |
 | Resolver | ADR 0005 algorithm and error precedence; which modes start change notifications | Fake backends, table-driven |
 | Watch | Change detection, emission, error handling, signals; wakes (read before the interval, minimum gap under a flood, burst coalescing, full-length error waits, closed channel, including during a wait, cancellation) | Fake reader sequences, injected `Sleep` that records whether it could be woken; the default timer with a one-hour interval for the wake path |
-| CLI | Flag parsing, usage errors, exit codes, `--quiet`, `--debug` secrecy; watch mode with a notifying backend and with one whose notifications fail to start | `cli.Run` with injected stdout, stderr, environment, and backends |
+| CLI | Flag parsing, usage errors, exit codes, `--quiet`, `--debug` secrecy; watch mode with a notifying backend, with one whose notifications fail to start, with one that closes its channel only some time after the stop (Run must wait for it), and with one that never closes it (Run must not wait more than the bound) | `cli.Run` with injected stdout, stderr, environment, and backends |
 
 Conventions:
 
@@ -166,6 +166,7 @@ These scenarios need real Spotify clients. Each row is run before the release th
 | No token file: `spmeta` makes no Web request; `--source web` exits 4 with the not-logged-in hint | n/a | n/a | n/a | Required |
 | `spmeta doctor`: `web` line is `not configured` before login, `ok` after, `error` with a corrupted token file | n/a | n/a | n/a | Required |
 | `--watch` prints one line per track change and nothing between | Required | Required | Required | Required |
+| `--watch --interval 30` prints a track change at once, before the next poll | Required (probe: Spotify posts `com.spotify.client.PlaybackStateChanged`; [issue #8](https://github.com/bkuberek/spmeta/issues/8)) | Required | Required | n/a |
 | Access revoked in account settings: exit 5 with login hint | n/a | n/a | n/a | Required |
 | Account not on the allowlist: exit 6 with both causes in the hint | n/a | n/a | n/a | Required |
 | SketchyBar or launchd agent as the responsible process | Required | n/a | n/a | n/a |

@@ -1,5 +1,11 @@
 package macos
 
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
 // readScript is the read script from docs/design/backend-macos.md. Fields are
 // separated by character id 31 (U+001F).
 const readScript = `
@@ -68,3 +74,53 @@ tell application id "com.spotify.client"
 	return "OK" & sep & pstate & sep & vName & sep & vArtist & sep & vAlbum & sep & vAlbumArtist & sep & vDuration & sep & vPosition & sep & vID & sep & vSpotifyURL & sep & vArtwork & sep & vTrackNumber & sep & vDiscNumber
 end tell
 `
+
+// listenerTemplate is the change listener, a JavaScript for Automation
+// program with two verbs: %[1]s for the quoted notification name and %[2]g for
+// the heartbeat in seconds. It registers an observer for that distributed
+// notification, prints "ready", then prints "changed" for each notification
+// and "tick" every heartbeat. It sends no Apple events: it never launches
+// Spotify and needs no Automation permission. The observer stays in a global
+// because the notification center does not retain it.
+//
+// The tick makes the listener die with its reader: once spmeta is gone, even
+// after SIGKILL, writing to stdout raises SIGPIPE, or fails when SIGPIPE is
+// ignored and the script exits.
+const listenerTemplate = `ObjC.import('Foundation');
+ObjC.import('stdlib');
+
+function say(line) {
+	var data = $(line + '\n').dataUsingEncoding($.NSUTF8StringEncoding);
+	if (!$.NSFileHandle.fileHandleWithStandardOutput.writeDataError(data, null)) {
+		$.exit(0);
+	}
+}
+
+ObjC.registerSubclass({
+	name: 'SpmetaObserver',
+	methods: {
+		'onChange:': {
+			types: ['void', ['id']],
+			implementation: function (notification) { say('changed'); }
+		},
+		'onTick:': {
+			types: ['void', ['id']],
+			implementation: function (timer) { say('tick'); }
+		}
+	}
+});
+
+var observer = $.SpmetaObserver.alloc.init;
+$.NSDistributedNotificationCenter.defaultCenter.addObserverSelectorNameObject(
+	observer, 'onChange:', %[1]s, $());
+$.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(%[2]g, observer, 'onTick:', $(), true);
+say('ready');
+$.NSRunLoop.currentRunLoop.run;
+`
+
+// listenerScript returns the change listener observing the distributed
+// notification name and ticking every heartbeat.
+func listenerScript(name string, heartbeat time.Duration) string {
+	quoted, _ := json.Marshal(name) // a string always marshals
+	return fmt.Sprintf(listenerTemplate, quoted, heartbeat.Seconds())
+}

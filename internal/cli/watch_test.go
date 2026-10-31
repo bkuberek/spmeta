@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -409,6 +410,7 @@ func TestWatchReadsChangeBeforeTheInterval(t *testing.T) {
 			notifierCtx = ctx
 			wake := make(chan struct{}, 1)
 			wake <- struct{}{} // the player signalled during the first read
+			context.AfterFunc(ctx, func() { close(wake) })
 			return wake, nil
 		},
 	}, "--watch", "--source", "local")
@@ -426,6 +428,47 @@ func TestWatchReadsChangeBeforeTheInterval(t *testing.T) {
 	}
 	if notifierCtx == nil || notifierCtx.Err() == nil {
 		t.Error("the notifier must be stopped when watch returns")
+	}
+}
+
+// main calls os.Exit as soon as Run returns, so a notifier still stopping,
+// such as a listener process being killed and reaped, would be orphaned.
+func TestWatchWaitsForTheNotifierToStop(t *testing.T) {
+	var stopped atomic.Bool
+	r := runWatch(t, watchSetup{
+		local: []wstep{{np: playing()}},
+		changes: func(ctx context.Context) (<-chan struct{}, error) {
+			wake := make(chan struct{})
+			go func() {
+				<-ctx.Done()
+				time.Sleep(50 * time.Millisecond) // stopping a listener takes a while
+				stopped.Store(true)
+				close(wake)
+			}()
+			return wake, nil
+		},
+	}, "--watch", "--source", "local")
+	if r.code != 0 || r.stdout != playingText {
+		t.Fatalf("exit %d, stdout %q; want 0 and one line", r.code, r.stdout)
+	}
+	if !stopped.Load() {
+		t.Error("Run returned before the notifier closed its channel")
+	}
+}
+
+func TestWatchDoesNotWaitForeverForTheNotifier(t *testing.T) {
+	start := time.Now()
+	r := runWatch(t, watchSetup{
+		local: []wstep{{np: playing()}},
+		changes: func(context.Context) (<-chan struct{}, error) {
+			return make(chan struct{}), nil // never closes
+		},
+	}, "--watch", "--source", "local")
+	if r.code != 0 || r.stdout != playingText {
+		t.Fatalf("exit %d, stdout %q; want 0 and one line", r.code, r.stdout)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("Run took %v; a notifier that never stops must not hold it past the stop bound", elapsed)
 	}
 }
 

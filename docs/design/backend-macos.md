@@ -21,6 +21,9 @@ func (b *Backend) Read(ctx context.Context) (model.NowPlaying, error)
 // CheckPermission is used by doctor. It never launches Spotify. beforePrompt,
 // when not nil, runs just before the Apple event is sent.
 func (b *Backend) CheckPermission(ctx context.Context, beforePrompt func()) PermissionResult
+
+// Changes implements backend.Notifier for watch mode (see Change notifications).
+func (b *Backend) Changes(ctx context.Context) (<-chan struct{}, error)
 ```
 
 `ExecRunner` is the production `Runner`:
@@ -179,6 +182,58 @@ tell application id "com.spotify.client" to return (player state as string)
 | Spotify not running | `unavailable`: cannot check permission without launching Spotify; start Spotify and run `spmeta doctor` again |
 
 macOS attributes the prompt to the responsible process. Under SketchyBar or another launchd agent, the prompt names that app; `doctor` prints the value of `TERM_PROGRAM` when set, to help the user find the right entry in System Settings.
+
+## Change notifications
+
+`Changes` lets watch mode read as soon as Spotify changes the track or the playback state, instead of waiting for the next poll ([ADR 0010](../decisions/0010-event-driven-watch.md)). It starts one long-lived `/usr/bin/osascript -l JavaScript -` process, writes the listener script to its stdin, closes stdin, and keeps the process until the watch context ends. It returns a channel that receives a value when a change may have happened and closes when the process exits.
+
+The listener is a JavaScript for Automation (JXA) program. `listenerScript` builds it from the notification name, as a JSON string literal, and the heartbeat interval in seconds; production uses `com.spotify.client.PlaybackStateChanged` and a 5 s heartbeat:
+
+```javascript
+ObjC.import('Foundation');
+ObjC.import('stdlib');
+
+function say(line) {
+	var data = $(line + '\n').dataUsingEncoding($.NSUTF8StringEncoding);
+	if (!$.NSFileHandle.fileHandleWithStandardOutput.writeDataError(data, null)) {
+		$.exit(0);
+	}
+}
+
+ObjC.registerSubclass({
+	name: 'SpmetaObserver',
+	methods: {
+		'onChange:': {
+			types: ['void', ['id']],
+			implementation: function (notification) { say('changed'); }
+		},
+		'onTick:': {
+			types: ['void', ['id']],
+			implementation: function (timer) { say('tick'); }
+		}
+	}
+});
+
+var observer = $.SpmetaObserver.alloc.init;
+$.NSDistributedNotificationCenter.defaultCenter.addObserverSelectorNameObject(
+	observer, 'onChange:', "com.spotify.client.PlaybackStateChanged", $());
+$.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(5, observer, 'onTick:', $(), true);
+say('ready');
+$.NSRunLoop.currentRunLoop.run;
+```
+
+Rules:
+
+- The listener only observes a distributed notification. It sends no Apple events, so it never launches Spotify, needs no Automation permission, and triggers no consent prompt. It therefore runs without the process guard, and it starts even when Spotify is not running: notifications arrive once Spotify starts.
+- The observer stays in a global variable because the notification center does not retain it. The script prints `ready` after it registers the observer, so no notification is lost between `ready` and the first change.
+- `Changes` waits up to 2 s for `ready`. When the listener exits first or stays silent, `Changes` kills and reaps it and returns an error, and watch mode polls only. The error carries the exit status and the last line of the listener's stderr (at most 512 bytes are kept), or the read error when stdout could not be read, which `--debug` logs.
+- After `ready`, each `changed` line becomes a wake through `backend.Coalesce`: at most one wake is pending, so a burst of notifications costs one read. Any other line, including `tick`, is ignored, so it costs no read; a missed change is still found by the next poll.
+- The listener ignores the notification's `userInfo`. The read that follows takes a full snapshot with the read script, so one parser and one mapping serve both one-shot and watch reads.
+- When the watch context ends, `Changes` kills the listener. It always waits for the process, so no zombie remains, and the channel closes after the process exits. Watch mode waits up to 1 s for that close before it returns, because `spmeta` exits right after, so a normal stop (SIGINT, SIGTERM, or a fatal error) leaves no listener behind. If the listener dies during the run, the channel closes and watch mode polls for the rest of the run; `Changes` does not restart it.
+- The heartbeat covers the case where `spmeta` dies without stopping the listener, such as on SIGKILL or SIGHUP. Every 5 s the listener writes a `tick` line. Once `spmeta` is gone, nothing reads the pipe, so the write raises SIGPIPE and ends `osascript`; when SIGPIPE is ignored, the write fails and the script exits. An orphaned listener therefore exits within 5 s (about 3 s observed after SIGKILL and after SIGHUP). The ticks cost no measurable CPU: 0.0%, and 0.02 s of CPU time over 30 s.
+- Spotify does not document `com.spotify.client.PlaybackStateChanged`. Other tools rely on it, but Spotify posting it has not been observed live on this Mac yet ([issue #8](https://github.com/bkuberek/spmeta/issues/8), item "Instant watch"). If Spotify stops posting it, the listener stays idle and watch mode keeps polling at `--interval`, without an error.
+
+Each wake costs one read: the process check and the read script. The listener adds one `osascript` process per `--watch` run, measured on macOS 26 at 13 to 29 MB resident and 0.0% CPU while idle, and under 200 ms from start to `ready` (59 to 165 ms measured, slowest on a cold first run).
 
 ## Latency
 
